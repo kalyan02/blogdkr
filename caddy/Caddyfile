@@ -1,5 +1,87 @@
-# Caddyfile: PHP + static with strict 404s
+# ---------- reusable snippets ----------
+(security_headers) {
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+		Server "Caddy/BlogSync"
+	}
+}
 
+(app_routes) {
+	# API first
+	handle /health {
+		reverse_proxy localhost:3000
+	}
+	handle /webhook {
+		reverse_proxy localhost:3000
+	}
+	handle /auth/* {
+		reverse_proxy localhost:3000
+	}
+
+	# Everything else
+	handle {
+		# 1) /var/www/sync when file exists (never serve .php)
+		@sync_exists {
+			file {
+				root /var/www/sync
+				try_files {path} {path}/index.html
+			}
+		}
+		handle @sync_exists {
+			root * /var/www/sync
+			file_server {
+				hide *.php
+			}
+		}
+
+		# Default root for app content
+		root * /var/www/html
+
+		# 2) direct .php files
+		@php_file path *.php
+		handle @php_file {
+			php_fastcgi localhost:9000 {
+				# no implicit /index.php fallback
+				try_files {path} =404
+			}
+		}
+
+		# 3) directories containing index.php -> serve it for /dir or /dir/
+		@php_dir {
+			file {
+				root /var/www/html
+				try_files {path}/index.php
+			}
+		}
+		handle @php_dir {
+			rewrite * {path}/index.php
+			php_fastcgi localhost:9000 {
+				try_files {path} =404
+			}
+		}
+
+		# 4) static from /var/www/html when file exists (never serve .php)
+		@html_exists {
+			file {
+				root /var/www/html
+				try_files {path} {path}/index.html
+			}
+		}
+		handle @html_exists {
+			file_server {
+				hide *.php
+			}
+		}
+
+		# 5) nothing matched
+		respond 404
+	}
+}
+# ---------- end snippets ----------
+
+# TLS sites
 devnet.lonefish.net, devnet2.lonefish.net {
 	tls letsencrypt@namburi.org
 
@@ -11,86 +93,11 @@ devnet.lonefish.net, devnet2.lonefish.net {
 		format json
 	}
 
-	header {
-		X-Frame-Options "SAMEORIGIN"
-		X-Content-Type-Options "nosniff"
-		X-XSS-Protection "1; mode=block"
-		Server "Caddy/BlogSync"
-	}
-
-	# API
-	handle /health {
-		reverse_proxy localhost:3000
-	}
-	handle /webhook {
-		reverse_proxy localhost:3000
-	}
-	handle /auth/* {
-		reverse_proxy localhost:3000
-	}
-
-	# Everything else
-	handle {
-		# 1) Static from /var/www/sync (never serve .php)
-		@sync_static {
-			not {
-				path *.php
-			}
-			file {
-				root /var/www/sync
-				try_files {path} {path}/index.html
-			}
-		}
-		handle @sync_static {
-			root * /var/www/sync
-			file_server
-		}
-
-		# 2) Direct .php files under /var/www/html
-		@php_file path *.php
-		handle @php_file {
-			root * /var/www/html
-			php_fastcgi localhost:9000 {
-				# disable fallback to /index.php
-				try_files {path} =404
-			}
-		}
-
-		# 3) Directories that contain index.php (serve for /dir or /dir/)
-		@php_dir {
-			file {
-				root /var/www/html
-				try_files {path}/index.php
-			}
-		}
-		handle @php_dir {
-			rewrite * {path}/index.php
-			root * /var/www/html
-			php_fastcgi localhost:9000 {
-				try_files {path} =404
-			}
-		}
-
-		# 4) Static from /var/www/html (never serve .php)
-		@html_static {
-			not {
-				path *.php
-			}
-			file {
-				root /var/www/html
-				try_files {path} {path}/index.html
-			}
-		}
-		handle @html_static {
-			root * /var/www/html
-			file_server
-		}
-
-		# 5) Nothing matched
-		respond 404
-	}
+	import security_headers
+	import app_routes
 }
 
+# Plain HTTP
 :80 {
 	log {
 		output file /var/log/caddy/access_http.log {
@@ -100,76 +107,6 @@ devnet.lonefish.net, devnet2.lonefish.net {
 		format json
 	}
 
-	header {
-		X-Frame-Options "SAMEORIGIN"
-		X-Content-Type-Options "nosniff"
-		X-XSS-Protection "1; mode=block"
-		Server "Caddy/BlogSync"
-	}
-
-	# API
-	handle /health {
-		reverse_proxy localhost:3000
-	}
-	handle /webhook {
-		reverse_proxy localhost:3000
-	}
-	handle /auth/* {
-		reverse_proxy localhost:3000
-	}
-
-	# Everything else
-	handle {
-		@sync_static {
-			not {
-				path *.php
-			}
-			file {
-				root /var/www/sync
-				try_files {path} {path}/index.html
-			}
-		}
-		handle @sync_static {
-			root * /var/www/sync
-			file_server
-		}
-
-		@php_file path *.php
-		handle @php_file {
-			root * /var/www/html
-			php_fastcgi localhost:9000 {
-				try_files {path} =404
-			}
-		}
-
-		@php_dir {
-			file {
-				root /var/www/html
-				try_files {path}/index.php
-			}
-		}
-		handle @php_dir {
-			rewrite * {path}/index.php
-			root * /var/www/html
-			php_fastcgi localhost:9000 {
-				try_files {path} =404
-			}
-		}
-
-		@html_static {
-			not {
-				path *.php
-			}
-			file {
-				root /var/www/html
-				try_files {path} {path}/index.html
-			}
-		}
-		handle @html_static {
-			root * /var/www/html
-			file_server
-		}
-
-		respond 404
-	}
+	import security_headers
+	import app_routes
 }
