@@ -1,0 +1,5 @@
+/target
+/blogsync/target
+/caddy/data
+/caddy/logs
+/caddy/config

@@ -57,6 +57,13 @@ impl SyncManager {
 
         info!("Found {} files in Dropbox", files.len());
 
+        //print the file and metadata
+        for file in &files {
+            debug!("File: {}, Size: {}, Modified: {}", 
+                   file.path, file.size, file.modified);
+        }
+
+
         // Build a set of all files that should exist locally
         let mut expected_files = std::collections::HashSet::new();
         
@@ -121,23 +128,69 @@ impl SyncManager {
 
     async fn run_build_command(&self) -> Result<()> {
         info!("Running build command: {}", self.config.build.command);
-        
+
+
+
         let working_dir = Path::new(&self.config.build.working_directory);
         if !working_dir.exists() {
             warn!("Build working directory does not exist: {:?}", working_dir);
             return Ok(());
         }
 
+        let working_dir = if working_dir.is_relative() {
+            std::env::current_dir()
+                .context("Failed to get current working directory")?
+                .join(working_dir).canonicalize()
+                .context("Failed to resolve working directory")?
+        } else {
+            working_dir.to_path_buf()
+        };
+
+        // print where we are
+        let output = Command::new("sh")
+            .args(["-c", "zola"])
+            .current_dir(&working_dir)
+            .output()
+            .context("Failed to execute pwd")?;
+        let pwd = String::from_utf8_lossy(&output.stdout);
+        info!("Expected PWD directory: {}", pwd.trim());
+
         let parts: Vec<&str> = self.config.build.command.split_whitespace().collect();
         if parts.is_empty() {
             return Err(anyhow::anyhow!("Empty build command"));
         }
 
-        let output = Command::new(parts[0])
-            .args(&parts[1..])
+        // print command and args
+        info!("Executing build command: {:?}", parts);
+        // print working directory
+        info!("Build working directory: {:?}", working_dir);
+        // print pwd
+        {
+            let current_dir = std::env::current_dir()
+                .context("Failed to get current working directory")?;
+            info!("Current working directory: {:?}", current_dir);
+        }
+        // if parts.len() < 2 {
+        //     return Err(anyhow::anyhow!("Invalid build command format"));
+        // }
+
+        // set command and args
+        // ["-c", parts[0], ..parts[1..]]
+        // prepend parts[0] with "-c"
+        let mut command = vec!["-c"];
+        command.extend_from_slice(&parts[0..]);
+
+        info!("Running build command: {:?}", command);
+
+        let output = Command::new("sh")
+            .args(&command)
             .current_dir(working_dir)
             .output()
             .context("Failed to execute build command")?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        info!("Build command completed successfully");
+        info!("Build output: {}", stdout);
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -147,10 +200,6 @@ impl SyncManager {
                 stderr
             ));
         }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        info!("Build command completed successfully");
-        debug!("Build output: {}", stdout);
 
         Ok(())
     }

@@ -36,77 +36,68 @@
 			}
 		}
 
-		# Default root for app content
-		root * /var/www/html
+        root * /var/www/html
 
-		# 2) direct .php files
-		@php_file path *.php
-		handle @php_file {
-			php_fastcgi localhost:9000 {
-				# no implicit /index.php fallback
-				try_files {path} =404
-			}
-		}
 
-		# 3) directories containing index.php -> serve it for /dir or /dir/
-		@php_dir {
-			file {
-				root /var/www/html
-				try_files {path}/index.php
-			}
-		}
-		handle @php_dir {
-			rewrite * {path}/index.php
-			php_fastcgi localhost:9000 {
-				try_files {path} =404
-			}
-		}
+        # @in_test path /test/*
+        # handle @in_test {
+        #     # Match files that exist under /var/www/html/test/
+        #     @exists file {
+        #         try_files {path}
+        #     }
+        #     handle @exists {
+        #         # Serve existing static files (hide .php)
+        #         file_server {
+        #             hide *.php
+        #         }
+        #         # If it's a real .php file, execute it
+        #         php_fastcgi localhost:9000
+        #     }
+        #     # If file doesn't exist, rewrite to /test/index.php
+        #     rewrite * /test/index.php
+        #     php_fastcgi localhost:9000
+        # }
 
-		# 4) static from /var/www/html when file exists (never serve .php)
-		@html_exists {
-			file {
-				root /var/www/html
-				try_files {path} {path}/index.html
-			}
-		}
-		handle @html_exists {
-			file_server {
-				hide *.php
-			}
-		}
+
+        # Handles .php and directories with index.php
+        php_fastcgi localhost:9000 {
+            try_files {path} {path}/index.php =404
+        }
+
+        # Serve static files, hide .php from being served as plain files
+        file_server {
+            hide *.php
+        }
 
 		# 5) nothing matched
-		respond 404
+		# respond 404
 	}
 }
+
+(logging) {
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+        format json
+    }
+}
+
 # ---------- end snippets ----------
 
 # TLS sites
 devnet.lonefish.net, devnet2.lonefish.net {
 	tls letsencrypt@namburi.org
 
-	log {
-		output file /var/log/caddy/access.log {
-			roll_size 10MB
-			roll_keep 5
-		}
-		format json
-	}
-
+	import logging
 	import security_headers
 	import app_routes
 }
 
 # Plain HTTP
 :80 {
-	log {
-		output file /var/log/caddy/access_http.log {
-			roll_size 10MB
-			roll_keep 5
-		}
-		format json
-	}
-
+	import logging
 	import security_headers
 	import app_routes
 }

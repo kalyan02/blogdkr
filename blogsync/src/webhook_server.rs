@@ -49,7 +49,7 @@ struct WebhookAccount {
 
 #[derive(Debug, Deserialize)]
 struct WebhookDelta {
-    users: Vec<String>,
+    users: Vec<u64>,
 }
 
 pub struct WebhookServer {

@@ -14,6 +14,44 @@ struct ListFolderResponse {
     has_more: bool,
 }
 
+/*
+        {
+            ".tag": "file",
+            "client_modified": "2015-05-12T15:50:38Z",
+            "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "file_lock_info": {
+                "created": "2015-05-12T15:50:38Z",
+                "is_lockholder": true,
+                "lockholder_name": "Imaginary User"
+            },
+            "has_explicit_shared_members": false,
+            "id": "id:a4ayc_80_OEAAAAAAAAAXw",
+            "is_downloadable": true,
+            "name": "Prime_Numbers.txt",
+            "path_display": "/Homework/math/Prime_Numbers.txt",
+            "path_lower": "/homework/math/prime_numbers.txt",
+            "property_groups": [
+                {
+                    "fields": [
+                        {
+                            "name": "Security Policy",
+                            "value": "Confidential"
+                        }
+                    ],
+                    "template_id": "ptid:1a5n2i6d3OYEAAAAAAAAAYa"
+                }
+            ],
+            "rev": "a1c10ce0dd78",
+            "server_modified": "2015-05-12T15:50:38Z",
+            "sharing_info": {
+                "modified_by": "dbid:AAH4f99T0taONIb-OurWxbNQ6ywGRopQngc",
+                "parent_shared_folder_id": "84528192421",
+                "read_only": true
+            },
+            "size": 7212
+        }
+*/
+
 #[derive(Debug, Deserialize)]
 struct Metadata {
     #[serde(rename = ".tag")]
@@ -25,6 +63,10 @@ struct Metadata {
     client_modified: Option<String>,
     server_modified: Option<String>,
     size: Option<u64>,
+    #[serde(rename = "content_hash")]
+    content_hash: Option<String>,
+    #[serde(rename = "is_downloadable")]
+    is_downloadable: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -108,6 +150,9 @@ impl DropboxClient {
                     path: entry.path_display.unwrap_or_default(),
                     size: entry.size.unwrap_or(0),
                     modified: entry.server_modified.unwrap_or_default(),
+                    id: entry.id,
+                    content_hash: entry.content_hash,
+                    is_downloadable: entry.is_downloadable,
                 });
             }
         }
@@ -204,4 +249,10 @@ pub struct FileInfo {
     pub path: String,
     pub size: u64,
     pub modified: String,
+    // id
+    pub id: Option<String>,
+    // content_hash
+    pub content_hash: Option<String>,
+    // is_downloadable
+    pub is_downloadable: Option<bool>,
 }
