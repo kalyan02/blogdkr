@@ -38,11 +38,11 @@ devnet.lonefish.net, devnet2.lonefish.net {
     
     # Handle all other requests with fallback mechanism
     handle {
-        # First try sync folder (including index files)
+        # First try sync folder
         @sync_file {
             file {
                 root /var/www/sync
-                try_files {path} {path}/index.html {path}/index.php
+                try_files {path}
             }
         }
         handle @sync_file {
@@ -51,20 +51,7 @@ devnet.lonefish.net, devnet2.lonefish.net {
             }
         }
         
-        # Then try static files in public_html (including index files)
-        @html_file {
-            file {
-                root /var/www/html
-                try_files {path} {path}/index.html
-            }
-        }
-        handle @html_file {
-            file_server {
-                root /var/www/html
-            }
-        }
-        
-        # Then try specific PHP files
+        # Then try PHP files in public_html
         @php_file {
             path *.php
         }
@@ -74,10 +61,23 @@ devnet.lonefish.net, devnet2.lonefish.net {
             }
         }
         
-        # Final fallback to index.php for everything else
+        # Then try static files in public_html
+        @html_file {
+            file {
+                root /var/www/html
+                try_files {path}
+            }
+        }
+        handle @html_file {
+            file_server {
+                root /var/www/html
+            }
+        }
+        
+        # Final fallback to index.php
         php_fastcgi localhost:9000 {
             root /var/www/html
-            try_files {path} {path}/index.php /index.php
+            index index.php
         }
     }
 }
@@ -119,11 +119,11 @@ devnet.lonefish.net, devnet2.lonefish.net {
     
     # Handle all other requests with fallback mechanism
     handle {
-        # First try sync folder (including index files)
+        # First try sync folder
         @sync_file {
             file {
                 root /var/www/sync
-                try_files {path} {path}/index.html {path}/index.php
+                try_files {path}
             }
         }
         handle @sync_file {
@@ -132,20 +132,7 @@ devnet.lonefish.net, devnet2.lonefish.net {
             }
         }
         
-        # Then try static files in public_html (including index files)
-        @html_file {
-            file {
-                root /var/www/html
-                try_files {path} {path}/index.html
-            }
-        }
-        handle @html_file {
-            file_server {
-                root /var/www/html
-            }
-        }
-        
-        # Then try specific PHP files
+        # Then try PHP files in public_html
         @php_file {
             path *.php
         }
@@ -155,10 +142,23 @@ devnet.lonefish.net, devnet2.lonefish.net {
             }
         }
         
-        # Final fallback to index.php for everything else
+        # Then try static files in public_html
+        @html_file {
+            file {
+                root /var/www/html
+                try_files {path}
+            }
+        }
+        handle @html_file {
+            file_server {
+                root /var/www/html
+            }
+        }
+        
+        # Final fallback to index.php
         php_fastcgi localhost:9000 {
             root /var/www/html
-            try_files {path} {path}/index.php /index.php
+            index index.php
         }
     }
 }
