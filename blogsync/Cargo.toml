@@ -1,0 +1,28 @@
+[package]
+name = "dropbox-sync"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1.0"
+url = "2.5"
+uuid = { version = "1.0", features = ["v4"] }
+base64 = "0.22"
+sha2 = "0.10"
+aes-gcm = "0.10"
+rand = "0.8"
+clap = { version = "4.0", features = ["derive"] }
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+glob = "0.3"
+rpassword = "7.0"

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # PHP-FPM service
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile-php
+    container_name: blogsync-php
+    volumes:
+      - ./public_html:/var/www/html
+      - ./blogsync/sync:/var/www/sync:ro
+    restart: unless-stopped
+    network_mode: host
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Caddy reverse proxy with PHP support
+  caddy:
+    image: caddy:2-alpine
+    container_name: blogsync-caddy
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+      - ./caddy/logs:/var/log/caddy
+      - ./public_html:/var/www/html
+      - ./blogsync/sync:/var/www/sync:ro
+    restart: unless-stopped
+    network_mode: host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# No Docker volumes - using host-mounted directories

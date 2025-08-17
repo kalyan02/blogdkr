@@ -1,0 +1,207 @@
+use anyhow::{Context, Result};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::Path;
+
+use crate::dropbox_auth::DropboxAuth;
+use std::sync::Arc;
+
+#[derive(Debug, Deserialize)]
+struct ListFolderResponse {
+    entries: Vec<Metadata>,
+    cursor: String,
+    has_more: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct Metadata {
+    #[serde(rename = ".tag")]
+    tag: String,
+    name: String,
+    path_lower: Option<String>,
+    path_display: Option<String>,
+    id: Option<String>,
+    client_modified: Option<String>,
+    server_modified: Option<String>,
+    size: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct ListFolderRequest {
+    path: String,
+    recursive: bool,
+    include_media_info: bool,
+    include_deleted: bool,
+    include_has_explicit_shared_members: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct DownloadRequest {
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserInfo {
+    pub name: UserName,
+    pub email: String,
+    pub account_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserName {
+    pub given_name: String,
+    pub surname: String,
+    pub familiar_name: String,
+    pub display_name: String,
+}
+
+pub struct DropboxClient {
+    client: Client,
+    auth: Arc<DropboxAuth>,
+}
+
+impl DropboxClient {
+    pub fn new(auth: Arc<DropboxAuth>) -> Self {
+        Self {
+            client: Client::new(),
+            auth,
+        }
+    }
+
+    pub async fn list_folder(&self, folder_path: &str, recursive: bool) -> Result<Vec<FileInfo>> {
+        let access_token = self.auth.get_valid_access_token().await?;
+        
+        let request = ListFolderRequest {
+            path: if folder_path == "/" { "".to_string() } else { folder_path.to_string() },
+            recursive,
+            include_media_info: false,
+            include_deleted: false,
+            include_has_explicit_shared_members: false,
+        };
+
+        let response = self
+            .client
+            .post("https://api.dropboxapi.com/2/files/list_folder")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to list folder")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Dropbox API error: {}", error_text));
+        }
+
+        let list_response: ListFolderResponse = response
+            .json()
+            .await
+            .context("Failed to parse list folder response")?;
+
+        let mut files = Vec::new();
+        for entry in list_response.entries {
+            if entry.tag == "file" {
+                files.push(FileInfo {
+                    name: entry.name,
+                    path: entry.path_display.unwrap_or_default(),
+                    size: entry.size.unwrap_or(0),
+                    modified: entry.server_modified.unwrap_or_default(),
+                });
+            }
+        }
+
+        Ok(files)
+    }
+
+    pub async fn download_file(&self, dropbox_path: &str, local_path: &Path) -> Result<()> {
+        let access_token = self.auth.get_valid_access_token().await?;
+        
+        let download_request = DownloadRequest {
+            path: dropbox_path.to_string(),
+        };
+
+        let response = self
+            .client
+            .post("https://content.dropboxapi.com/2/files/download")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Dropbox-API-Arg", serde_json::to_string(&download_request)?)
+            .send()
+            .await
+            .context("Failed to download file")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Dropbox download error: {}", error_text));
+        }
+
+        let bytes = response.bytes().await?;
+        
+        if let Some(parent) = local_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
+        std::fs::write(local_path, bytes)?;
+        Ok(())
+    }
+
+    pub async fn setup_webhook(&self, webhook_url: &str) -> Result<()> {
+        let access_token = self.auth.get_valid_access_token().await?;
+        
+        let mut params = HashMap::new();
+        params.insert("url", webhook_url);
+
+        let response = self
+            .client
+            .post("https://api.dropboxapi.com/2/files/list_folder/get_latest_cursor")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                "path": "",
+                "recursive": true
+            }))
+            .send()
+            .await
+            .context("Failed to get initial cursor for webhook")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to setup webhook: {}", error_text));
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_current_account(&self) -> Result<UserInfo> {
+        let access_token = self.auth.get_valid_access_token().await?;
+        
+        let response = self
+            .client
+            .post("https://api.dropboxapi.com/2/users/get_current_account")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .send()
+            .await
+            .context("Failed to get current account")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Dropbox API error: {}", error_text));
+        }
+
+        let user_info: UserInfo = response
+            .json()
+            .await
+            .context("Failed to parse current account response")?;
+
+        Ok(user_info)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FileInfo {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub modified: String,
+}

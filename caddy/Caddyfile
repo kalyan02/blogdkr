@@ -1,0 +1,164 @@
+# Caddyfile for PHP + static file serving with sync folder fallback
+
+devnet.lonefish.net, devnet2.lonefish.net {
+    tls letsencrypt@namburi.org
+    
+    # Enable access logs
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+        format json
+    }
+    
+    # Add some useful headers
+    header {
+        # Security headers
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        
+        # Add server identification
+        Server "Caddy/BlogSync"
+    }
+    
+    # Handle BlogSync API endpoints (proxy to Rust service)
+    handle /health {
+        reverse_proxy localhost:3000
+    }
+    
+    handle /webhook {
+        reverse_proxy localhost:3000
+    }
+    
+    handle /auth/* {
+        reverse_proxy localhost:3000
+    }
+    
+    # Handle all other requests with fallback mechanism
+    handle {
+        # First try sync folder (including index files)
+        @sync_file {
+            file {
+                root /var/www/sync
+                try_files {path} {path}/index.html {path}/index.php
+            }
+        }
+        handle @sync_file {
+            file_server {
+                root /var/www/sync
+            }
+        }
+        
+        # Then try static files in public_html (including index files)
+        @html_file {
+            file {
+                root /var/www/html
+                try_files {path} {path}/index.html
+            }
+        }
+        handle @html_file {
+            file_server {
+                root /var/www/html
+            }
+        }
+        
+        # Then try specific PHP files
+        @php_file {
+            path *.php
+        }
+        handle @php_file {
+            php_fastcgi localhost:9000 {
+                root /var/www/html
+            }
+        }
+        
+        # Final fallback to index.php for everything else
+        php_fastcgi localhost:9000 {
+            root /var/www/html
+            try_files {path} {path}/index.php /index.php
+        }
+    }
+}
+
+# HTTP port 80 with same fallback logic
+:80 {
+    # Enable access logs
+    log {
+        output file /var/log/caddy/access_http.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+        format json
+    }
+    
+    # Add some useful headers
+    header {
+        # Security headers
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        
+        # Add server identification
+        Server "Caddy/BlogSync"
+    }
+    
+    # Handle BlogSync API endpoints (proxy to Rust service)
+    handle /health {
+        reverse_proxy localhost:3000
+    }
+    
+    handle /webhook {
+        reverse_proxy localhost:3000
+    }
+    
+    handle /auth/* {
+        reverse_proxy localhost:3000
+    }
+    
+    # Handle all other requests with fallback mechanism
+    handle {
+        # First try sync folder (including index files)
+        @sync_file {
+            file {
+                root /var/www/sync
+                try_files {path} {path}/index.html {path}/index.php
+            }
+        }
+        handle @sync_file {
+            file_server {
+                root /var/www/sync
+            }
+        }
+        
+        # Then try static files in public_html (including index files)
+        @html_file {
+            file {
+                root /var/www/html
+                try_files {path} {path}/index.html
+            }
+        }
+        handle @html_file {
+            file_server {
+                root /var/www/html
+            }
+        }
+        
+        # Then try specific PHP files
+        @php_file {
+            path *.php
+        }
+        handle @php_file {
+            php_fastcgi localhost:9000 {
+                root /var/www/html
+            }
+        }
+        
+        # Final fallback to index.php for everything else
+        php_fastcgi localhost:9000 {
+            root /var/www/html
+            try_files {path} {path}/index.php /index.php
+        }
+    }
+}

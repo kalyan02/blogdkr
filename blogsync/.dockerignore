@@ -1,0 +1,40 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Git
+.git/
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+dropbox-sync.log
+
+# Local sync directories
+sync/
+output/
+
+# Config and secrets (should be mounted)
+config.toml
+.env
+
+# Backup files
+backups/
+
+# Documentation (not needed in container)
+README.md
+docs/
+
+# Development files
+Makefile
+.dockerignore
