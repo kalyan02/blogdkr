@@ -1,6 +1,7 @@
-use digest::Digest;
+use digest::{Update, Digest};
 use sha2::Sha256;
-use generic_array::{GenericArray};
+use std::path::Path;
+use std::io::Read;
 
 pub const BLOCK_SIZE: usize = 4 * 1024 * 1024;
 
@@ -30,7 +31,7 @@ pub const BLOCK_SIZE: usize = 4 * 1024 * 1024;
 /// println!("{}", hex_hash);
 /// ```
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct DropboxContentHasher {
     overall_hasher: Sha256,
     block_hasher: Sha256,
@@ -45,37 +46,58 @@ impl DropboxContentHasher {
             block_pos: 0,
         }
     }
-}
 
-impl Default for DropboxContentHasher {
-    fn default() -> Self { Self::new() }
-}
-
-impl Digest for DropboxContentHasher {
-    type OutputSize = <Sha256 as Digest>::OutputSize;
-    type BlockSize = <Sha256 as Digest>::BlockSize;
-
-    fn input(&mut self, mut input: &[u8]) {
-        while input.len() > 0 {
+    pub fn update(&mut self, mut input: &[u8]) {
+        while !input.is_empty() {
             if self.block_pos == BLOCK_SIZE {
-                self.overall_hasher.input(self.block_hasher.result().as_slice());
-                self.block_hasher = Sha256::new();
+                Update::update(&mut self.overall_hasher, self.block_hasher.finalize_reset().as_slice());
                 self.block_pos = 0;
             }
 
             let space_in_block = BLOCK_SIZE - self.block_pos;
             let (head, rest) = input.split_at(std::cmp::min(input.len(), space_in_block));
-            self.block_hasher.input(head);
+            Update::update(&mut self.block_hasher, head);
 
             self.block_pos += head.len();
             input = rest;
         }
     }
 
-    fn result(mut self) -> GenericArray<u8, Self::OutputSize> {
+    pub fn finalize(mut self) -> String {
         if self.block_pos > 0 {
-            self.overall_hasher.input(self.block_hasher.result().as_slice());
+            Update::update(&mut self.overall_hasher, self.block_hasher.finalize().as_slice());
         }
-        self.overall_hasher.result()
+        format!("{:x}", self.overall_hasher.finalize())
     }
+}
+
+impl Default for DropboxContentHasher {
+    fn default() -> Self { Self::new() }
+}
+
+pub fn hash_file(file_path: &Path) -> anyhow::Result<String> {
+    let mut file = std::fs::File::open(file_path)?;
+    let mut hasher = DropboxContentHasher::new();
+    let mut buffer = [0u8; 65536];
+    
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    
+    Ok(hasher.finalize())
+}
+
+pub fn hash_bytes(data: &[u8]) -> String {
+    let mut hasher = DropboxContentHasher::new();
+    hasher.update(data);
+    hasher.finalize()
+}
+
+pub fn files_match(file_path: &Path, dropbox_hash: &str) -> anyhow::Result<bool> {
+    let local_hash = hash_file(file_path)?;
+    Ok(local_hash == dropbox_hash)
 }

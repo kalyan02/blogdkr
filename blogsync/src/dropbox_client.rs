@@ -83,6 +83,16 @@ struct DownloadRequest {
     path: String,
 }
 
+#[derive(Debug, Serialize)]
+struct ListFolderContinueRequest {
+    cursor: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DownloadZipRequest {
+    path: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct UserInfo {
     pub name: UserName,
@@ -111,7 +121,7 @@ impl DropboxClient {
         }
     }
 
-    pub async fn list_folder(&self, folder_path: &str, recursive: bool) -> Result<Vec<FileInfo>> {
+    pub async fn list_folder(&self, folder_path: &str, recursive: bool) -> Result<(Vec<FileInfo>, String)> {
         let access_token = self.auth.get_valid_access_token().await?;
         
         let request = ListFolderRequest {
@@ -137,15 +147,17 @@ impl DropboxClient {
             return Err(anyhow::anyhow!("Dropbox API error: {}", error_text));
         }
 
-        let list_response: ListFolderResponse = response
+        let mut list_response: ListFolderResponse = response
             .json()
             .await
             .context("Failed to parse list folder response")?;
 
-        let mut files = Vec::new();
+        let mut all_files = Vec::new();
+        
+        // Process initial entries
         for entry in list_response.entries {
             if entry.tag == "file" {
-                files.push(FileInfo {
+                all_files.push(FileInfo {
                     name: entry.name,
                     path: entry.path_display.unwrap_or_default(),
                     size: entry.size.unwrap_or(0),
@@ -157,7 +169,85 @@ impl DropboxClient {
             }
         }
 
-        Ok(files)
+        // Continue fetching if there are more entries
+        while list_response.has_more {
+            let continue_response = self.list_folder_continue(&list_response.cursor).await?;
+            list_response = continue_response;
+            
+            for entry in &list_response.entries {
+                if entry.tag == "file" {
+                    all_files.push(FileInfo {
+                        name: entry.name.clone(),
+                        path: entry.path_display.clone().unwrap_or_default(),
+                        size: entry.size.unwrap_or(0),
+                        modified: entry.server_modified.clone().unwrap_or_default(),
+                        id: entry.id.clone(),
+                        content_hash: entry.content_hash.clone(),
+                        is_downloadable: entry.is_downloadable,
+                    });
+                }
+            }
+        }
+
+        Ok((all_files, list_response.cursor))
+    }
+
+    pub async fn list_folder_continue(&self, cursor: &str) -> Result<ListFolderResponse> {
+        let access_token = self.auth.get_valid_access_token().await?;
+        
+        let request = ListFolderContinueRequest {
+            cursor: cursor.to_string(),
+        };
+
+        let response = self
+            .client
+            .post("https://api.dropboxapi.com/2/files/list_folder/continue")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to continue listing folder")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Dropbox API error: {}", error_text));
+        }
+
+        response
+            .json()
+            .await
+            .context("Failed to parse list folder continue response")
+    }
+
+    pub async fn get_changes_from_cursor(&self, cursor: &str) -> Result<Vec<FileInfo>> {
+        let continue_response = self.list_folder_continue(cursor).await?;
+        let mut all_files = Vec::new();
+        let mut current_response = continue_response;
+        
+        loop {
+            for entry in &current_response.entries {
+                if entry.tag == "file" {
+                    all_files.push(FileInfo {
+                        name: entry.name.clone(),
+                        path: entry.path_display.clone().unwrap_or_default(),
+                        size: entry.size.unwrap_or(0),
+                        modified: entry.server_modified.clone().unwrap_or_default(),
+                        id: entry.id.clone(),
+                        content_hash: entry.content_hash.clone(),
+                        is_downloadable: entry.is_downloadable,
+                    });
+                }
+            }
+            
+            if !current_response.has_more {
+                break;
+            }
+            
+            current_response = self.list_folder_continue(&current_response.cursor).await?;
+        }
+        
+        Ok(all_files)
     }
 
     pub async fn download_file(&self, dropbox_path: &str, local_path: &Path) -> Result<()> {
@@ -188,6 +278,41 @@ impl DropboxClient {
         }
         
         std::fs::write(local_path, bytes)?;
+        Ok(())
+    }
+
+    pub async fn download_zip(&self, folder_path: &str, local_zip_path: &Path) -> Result<()> {
+        let access_token = self.auth.get_valid_access_token().await?;
+        
+        let download_request = DownloadZipRequest {
+            path: if folder_path == "/" || folder_path.is_empty() { 
+                "".to_string() 
+            } else { 
+                folder_path.to_string() 
+            },
+        };
+
+        let response = self
+            .client
+            .post("https://content.dropboxapi.com/2/files/download_zip")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Dropbox-API-Arg", serde_json::to_string(&download_request)?)
+            .send()
+            .await
+            .context("Failed to download zip")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Dropbox download zip error: {}", error_text));
+        }
+
+        let bytes = response.bytes().await?;
+        
+        if let Some(parent) = local_zip_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
+        std::fs::write(local_zip_path, bytes)?;
         Ok(())
     }
 

@@ -11,7 +11,7 @@ webhook_path = "/webhook"
 
 [sync]
 local_base_path = "./sync"
-dropbox_folder = "/"
+dropbox_folder = "/blog"
 
 [build]
 command = "zola build"

@@ -4,6 +4,7 @@ mod dropbox_auth;
 mod dropbox_client;
 mod webhook_server;
 mod sync;
+mod content_hash;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -39,6 +40,9 @@ enum Commands {
     
     #[command(about = "Generate a default configuration file")]
     InitConfig,
+    
+    #[command(about = "Print the current access token for API testing")]
+    Token,
 }
 
 #[tokio::main]
@@ -55,6 +59,9 @@ async fn main() -> Result<()> {
         }
         Commands::Start => {
             start_server(&cli).await
+        }
+        Commands::Token => {
+            print_token(&cli).await
         }
     }
 }
@@ -77,14 +84,13 @@ async fn start_server(cli: &Cli) -> Result<()> {
     let auth = DropboxAuth::new(config.dropbox.clone(), token_storage);
     let auth_arc = Arc::new(auth);
     let dropbox_client = DropboxClient::new(auth_arc.clone());
-    let sync_manager = SyncManager::new((*config).clone(), dropbox_client);
+    let mut sync_manager = SyncManager::new((*config).clone(), dropbox_client);
     
     let (sync_sender, sync_receiver) = mpsc::unbounded_channel();
     
     let webhook_server = WebhookServer::new(config.clone(), sync_sender, auth_arc.clone());
     
     let sync_handle = {
-        let sync_manager = sync_manager;
         tokio::spawn(async move {
             sync_manager.start_sync_loop(sync_receiver).await;
         })
@@ -130,6 +136,29 @@ fn load_config(config_path: &str) -> Result<Config> {
     }
     
     Config::load_from_file(config_path)
+}
+
+async fn print_token(cli: &Cli) -> Result<()> {
+    let config = load_config(&cli.config)?;
+    let password = get_password(cli)?;
+    let token_storage = SecureTokenStorage::new(
+        SecureTokenStorage::get_default_token_path(),
+        &password,
+    );
+    
+    let auth = DropboxAuth::new(config.dropbox, token_storage);
+    
+    match auth.get_valid_access_token().await {
+        Ok(token) => {
+            println!("{}", token);
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Failed to get access token: {}", e);
+            eprintln!("You may need to authenticate first by running the server and visiting /admin/auth");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn get_password(cli: &Cli) -> Result<String> {

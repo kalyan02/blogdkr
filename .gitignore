@@ -1,5 +1,7 @@
 /target
 /blogsync/target
+/blogsync/sync
 /caddy/data
 /caddy/logs
 /caddy/config
+/public_html

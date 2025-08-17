@@ -28,6 +28,7 @@ pub struct AppState {
 #[derive(Debug)]
 pub enum SyncEvent {
     FilesChanged,
+    FilesChangedWithCursor(String),
     ForceSync,
 }
 
@@ -91,6 +92,7 @@ impl WebhookServer {
         // Admin server (port 3001) - admin endpoints (firewalled)
         let admin_app = Router::new()
             .route("/admin/sync", post(manual_sync))
+            .route("/admin/sync_zip", post(sync_zip))
             .route("/admin/status", get(admin_status))
             .route("/admin/auth", get(start_auth))
             .route("/admin/test", get(test_dropbox))
@@ -162,7 +164,13 @@ async fn index() -> Html<&'static str> {
             
             <p class="info">
                 <strong>Admin endpoints are available on port 3001</strong><br>
-                (should be firewalled from public access)
+                (should be firewalled from public access)<br><br>
+                <strong>Admin Endpoints:</strong><br>
+                <div class="endpoint">POST /admin/sync</div>
+                <div class="endpoint">POST /admin/sync_zip</div>
+                <div class="endpoint">GET /admin/status</div>
+                <div class="endpoint">GET /admin/auth</div>
+                <div class="endpoint">GET /admin/test</div>
             </p>
         </div>
     </body>
@@ -327,6 +335,137 @@ async fn manual_sync(
         .unwrap())
 }
 
+async fn sync_zip(
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    info!("Zip sync requested");
+    
+    let json_data = if !state.auth.has_valid_token() {
+        serde_json::json!({
+            "status": "error",
+            "message": "Not authenticated. Run /admin/auth first."
+        })
+    } else {
+        let client = DropboxClient::new(state.auth.clone());
+        
+        // Try to download as zip
+        let temp_zip_path = std::path::Path::new("/tmp/dropbox_sync.zip");
+
+        info!("Requesting download from path: {}", state.config.sync.dropbox_folder);
+        info!("Temporary zip path: {:?}", temp_zip_path);
+        match client.download_zip(&state.config.sync.dropbox_folder, temp_zip_path).await {
+            Ok(()) => {
+                // Check if file was created and get its size
+                match std::fs::metadata(temp_zip_path) {
+                    Ok(metadata) => {
+                        info!("Successfully downloaded zip file: {} bytes", metadata.len());
+                        let zip_size = metadata.len();
+                        
+                        // Extract the zip contents to sync folder
+                        let sync_folder = std::path::Path::new(&state.config.sync.local_base_path);
+                        match extract_zip(temp_zip_path, sync_folder).await {
+                            Ok(extracted_count) => {
+                                info!("Successfully extracted {} files from zip", extracted_count);
+                                
+                                // Clean up the temp file
+                                // if let Err(e) = std::fs::remove_file(temp_zip_path) {
+                                //     warn!("Failed to clean up temp zip file: {}", e);
+                                // }
+                                
+                                serde_json::json!({
+                                    "status": "success",
+                                    "message": "Successfully downloaded and extracted zip from Dropbox",
+                                    "zip_size": zip_size,
+                                    "files_extracted": extracted_count,
+                                    "extracted_to": state.config.sync.local_base_path,
+                                    "timestamp": chrono::Utc::now().to_rfc3339()
+                                })
+                            }
+                            Err(e) => {
+                                error!("Failed to extract zip: {}", e);
+                                
+                                // Clean up the temp file even on extraction error
+                                if let Err(cleanup_err) = std::fs::remove_file(temp_zip_path) {
+                                    warn!("Failed to clean up temp zip file after extraction error: {}", cleanup_err);
+                                }
+                                
+                                serde_json::json!({
+                                    "status": "error",
+                                    "message": format!("Downloaded zip but failed to extract: {}", e),
+                                    "zip_size": zip_size
+                                })
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to get zip metadata: {}", e);
+                        serde_json::json!({
+                            "status": "error",
+                            "message": format!("Failed to get zip metadata: {}", e)
+                        })
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Zip download failed: {}", e);
+                serde_json::json!({
+                    "status": "error",
+                    "message": format!("Zip download failed: {}", e)
+                })
+            }
+        }
+    };
+    
+    let pretty_json = serde_json::to_string_pretty(&json_data).unwrap_or_default();
+    
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(pretty_json.into())
+        .unwrap())
+}
+
+async fn extract_zip(zip_path: &std::path::Path, extract_to: &std::path::Path) -> anyhow::Result<usize> {
+    use zip::ZipArchive;
+    
+    let file = std::fs::File::open(zip_path)?;
+    let mut archive = ZipArchive::new(file)?;
+    
+    // Create the extraction directory if it doesn't exist
+    std::fs::create_dir_all(extract_to)?;
+    
+    let mut extracted_count = 0;
+    
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => extract_to.join(path),
+            None => continue,
+        };
+        
+        if file.name().ends_with('/') {
+            // Directory
+            info!("Creating directory: {:?}", outpath);
+            std::fs::create_dir_all(&outpath)?;
+        } else {
+            // File
+            info!("Extracting file: {:?}", outpath);
+            
+            if let Some(parent) = outpath.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)?;
+                }
+            }
+            
+            let mut outfile = std::fs::File::create(&outpath)?;
+            std::io::copy(&mut file, &mut outfile)?;
+            extracted_count += 1;
+        }
+    }
+    
+    Ok(extracted_count)
+}
+
 async fn admin_status(
     State(state): State<AppState>,
 ) -> Response {
@@ -440,7 +579,7 @@ async fn test_dropbox(
     } else {
         let client = DropboxClient::new(state.auth.clone());
         match client.list_folder("/", false).await {
-            Ok(files) => {
+            Ok((files, _cursor)) => {
                 serde_json::json!({
                     "status": "success",
                     "message": "Successfully connected to Dropbox",

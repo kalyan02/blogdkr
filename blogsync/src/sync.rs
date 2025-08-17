@@ -7,29 +7,53 @@ use tracing::{info, warn, error, debug};
 use crate::config::{Config, CopyRule};
 use crate::dropbox_client::{DropboxClient, FileInfo};
 use crate::webhook_server::SyncEvent;
+use crate::content_hash;
 
 pub struct SyncManager {
     config: Config,
     dropbox_client: DropboxClient,
+    last_cursor: Option<String>,
 }
 
 impl SyncManager {
     pub fn new(config: Config, dropbox_client: DropboxClient) -> Self {
+        let last_cursor = Self::load_cursor(&config.sync.local_base_path).ok();
         Self {
             config,
             dropbox_client,
+            last_cursor,
         }
     }
 
-    pub async fn start_sync_loop(&self, mut sync_receiver: mpsc::UnboundedReceiver<SyncEvent>) {
+    fn cursor_file_path(base_path: &str) -> std::path::PathBuf {
+        Path::new(base_path).join(".blogsync_cursor")
+    }
+
+    fn load_cursor(base_path: &str) -> Result<String> {
+        let cursor_file = Self::cursor_file_path(base_path);
+        std::fs::read_to_string(cursor_file).context("Failed to read cursor file")
+    }
+
+    fn save_cursor(&self, cursor: &str) -> Result<()> {
+        let cursor_file = Self::cursor_file_path(&self.config.sync.local_base_path);
+        std::fs::write(cursor_file, cursor).context("Failed to write cursor file")
+    }
+
+    pub async fn start_sync_loop(&mut self, mut sync_receiver: mpsc::UnboundedReceiver<SyncEvent>) {
         info!("Starting sync manager loop");
         
         while let Some(event) = sync_receiver.recv().await {
             match event {
                 SyncEvent::FilesChanged => {
-                    info!("Files changed event received, starting sync");
-                    if let Err(e) = self.sync_files().await {
-                        error!("Sync failed: {}", e);
+                    info!("Files changed event received, starting incremental sync");
+                    if let Err(e) = self.incremental_sync().await {
+                        error!("Incremental sync failed: {}", e);
+                    }
+                }
+                SyncEvent::FilesChangedWithCursor(cursor) => {
+                    info!("Files changed event with cursor received, starting incremental sync");
+                    if let Err(e) = self.incremental_sync_with_cursor(&cursor).await {
+                        error!("Incremental sync with cursor failed: {}", e);
                     }
                 }
                 SyncEvent::ForceSync => {
@@ -42,14 +66,14 @@ impl SyncManager {
         }
     }
 
-    async fn sync_files(&self) -> Result<()> {
+    async fn sync_files(&mut self) -> Result<()> {
         info!("Starting file synchronization");
         
         let base_path = Path::new(&self.config.sync.local_base_path);
         std::fs::create_dir_all(base_path)
             .context("Failed to create local base directory")?;
 
-        let files = self
+        let (files, new_cursor) = self
             .dropbox_client
             .list_folder(&self.config.sync.dropbox_folder, true)
             .await
@@ -101,18 +125,147 @@ impl SyncManager {
             return Err(e);
         }
 
+        if let Err(e) = self.save_cursor(&new_cursor) {
+            warn!("Failed to save cursor: {}", e);
+        } else {
+            self.last_cursor = Some(new_cursor.clone());
+            debug!("Saved cursor: {}", new_cursor);
+        }
+
         info!("Full sync process completed successfully");
+        Ok(())
+    }
+
+    async fn incremental_sync(&mut self) -> Result<()> {
+        if let Some(cursor) = self.last_cursor.clone() {
+            info!("Starting incremental sync from cursor");
+            
+            let changed_files = self
+                .dropbox_client
+                .get_changes_from_cursor(&cursor)
+                .await
+                .context("Failed to get changes from cursor")?;
+
+            if changed_files.is_empty() {
+                info!("No files changed since last sync");
+                return Ok(());
+            }
+
+            info!("Found {} changed files", changed_files.len());
+            
+            let base_path = Path::new(&self.config.sync.local_base_path);
+            
+            for file in &changed_files {
+                let relative_path = file.path.strip_prefix(&self.config.sync.dropbox_folder)
+                    .unwrap_or(&file.path)
+                    .trim_start_matches('/');
+                
+                let local_path = base_path.join(relative_path);
+                
+                debug!("Syncing changed file: {} -> {:?}", file.path, local_path);
+                
+                if let Err(e) = self.sync_single_file(file, &local_path).await {
+                    warn!("Failed to sync changed file {}: {}", file.path, e);
+                    continue;
+                }
+            }
+
+            if let Err(e) = self.run_build_command().await {
+                error!("Build command failed: {}", e);
+                return Err(e);
+            }
+
+            if let Err(e) = self.apply_copy_rules().await {
+                error!("Copy rules failed: {}", e);
+                return Err(e);
+            }
+
+            info!("Incremental sync completed successfully");
+        } else {
+            warn!("No cursor available, falling back to full sync");
+            self.sync_files().await?;
+        }
+        
+        Ok(())
+    }
+
+    async fn incremental_sync_with_cursor(&self, cursor: &str) -> Result<()> {
+        info!("Starting incremental sync with provided cursor");
+        
+        let changed_files = self
+            .dropbox_client
+            .get_changes_from_cursor(cursor)
+            .await
+            .context("Failed to get changes from cursor")?;
+
+        if changed_files.is_empty() {
+            info!("No files changed since provided cursor");
+            return Ok(());
+        }
+
+        info!("Found {} changed files", changed_files.len());
+        
+        let base_path = Path::new(&self.config.sync.local_base_path);
+        
+        for file in &changed_files {
+            let relative_path = file.path.strip_prefix(&self.config.sync.dropbox_folder)
+                .unwrap_or(&file.path)
+                .trim_start_matches('/');
+            
+            let local_path = base_path.join(relative_path);
+            
+            debug!("Syncing changed file: {} -> {:?}", file.path, local_path);
+            
+            if let Err(e) = self.sync_single_file(file, &local_path).await {
+                warn!("Failed to sync changed file {}: {}", file.path, e);
+                continue;
+            }
+        }
+
+        if let Err(e) = self.run_build_command().await {
+            error!("Build command failed: {}", e);
+            return Err(e);
+        }
+
+        if let Err(e) = self.apply_copy_rules().await {
+            error!("Copy rules failed: {}", e);
+            return Err(e);
+        }
+
+        info!("Incremental sync with cursor completed successfully");
         Ok(())
     }
 
     async fn sync_single_file(&self, file_info: &FileInfo, local_path: &Path) -> Result<()> {
         if local_path.exists() {
-            let metadata = std::fs::metadata(local_path)?;
-            let local_size = metadata.len();
-            
-            if local_size == file_info.size {
-                debug!("File {} already up to date", file_info.path);
-                return Ok(());
+            if let Some(dropbox_hash) = &file_info.content_hash {
+                match content_hash::files_match(local_path, dropbox_hash) {
+                    Ok(true) => {
+                        debug!("File {} already up to date (hash match)", file_info.path);
+                        return Ok(());
+                    }
+                    Ok(false) => {
+                        debug!("File {} has different content hash, updating", file_info.path);
+                    }
+                    Err(e) => {
+                        warn!("Failed to check content hash for {}: {}, falling back to size check", file_info.path, e);
+                        let metadata = std::fs::metadata(local_path)?;
+                        let local_size = metadata.len();
+                        
+                        if local_size == file_info.size {
+                            debug!("File {} size matches, assuming up to date", file_info.path);
+                            return Ok(());
+                        }
+                    }
+                }
+            } else {
+                let metadata = std::fs::metadata(local_path)?;
+                let local_size = metadata.len();
+                
+                if local_size == file_info.size {
+                    debug!("File {} size matches and no hash available, assuming up to date", file_info.path);
+                    return Ok(());
+                }
             }
         }
 
