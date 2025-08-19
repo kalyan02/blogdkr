@@ -32,11 +32,5 @@ services:
       - ./blogsync/sync:/var/www/sync:ro
     restart: unless-stopped
     network_mode: host
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
 # No Docker volumes - using host-mounted directories
