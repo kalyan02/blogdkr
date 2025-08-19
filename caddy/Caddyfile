@@ -36,38 +36,37 @@
 			}
 		}
 
-        root * /var/www/html
+		root * /var/www/html
+
+		# @in_test path /test/*
+		# handle @in_test {
+		#     # Match files that exist under /var/www/html/test/
+		#     @exists file {
+		#         try_files {path}
+		#     }
+		#     handle @exists {
+		#         # Serve existing static files (hide .php)
+		#         file_server {
+		#             hide *.php
+		#         }
+		#         # If it's a real .php file, execute it
+		#         php_fastcgi localhost:9000
+		#     }
+		#     # If file doesn't exist, rewrite to /test/index.php
+		#     rewrite * /test/index.php
+		#     php_fastcgi localhost:9000
+		# }
 
 
-        # @in_test path /test/*
-        # handle @in_test {
-        #     # Match files that exist under /var/www/html/test/
-        #     @exists file {
-        #         try_files {path}
-        #     }
-        #     handle @exists {
-        #         # Serve existing static files (hide .php)
-        #         file_server {
-        #             hide *.php
-        #         }
-        #         # If it's a real .php file, execute it
-        #         php_fastcgi localhost:9000
-        #     }
-        #     # If file doesn't exist, rewrite to /test/index.php
-        #     rewrite * /test/index.php
-        #     php_fastcgi localhost:9000
-        # }
+		# Handles .php and directories with index.php
+		php_fastcgi localhost:9000 {
+			try_files {path} {path}/index.php =404
+		}
 
-
-        # Handles .php and directories with index.php
-        php_fastcgi localhost:9000 {
-            try_files {path} {path}/index.php =404
-        }
-
-        # Serve static files, hide .php from being served as plain files
-        file_server {
-            hide *.php
-        }
+		# Serve static files, hide .php from being served as plain files
+		file_server {
+			hide *.php
+		}
 
 		# 5) nothing matched
 		# respond 404
@@ -75,13 +74,13 @@
 }
 
 (logging) {
-    log {
-        output file /var/log/caddy/access.log {
-            roll_size 10MB
-            roll_keep 5
-        }
-        format json
-    }
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+		format json
+	}
 }
 
 # ---------- end snippets ----------
