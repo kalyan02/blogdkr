@@ -1,0 +1,26 @@
+[dropbox]
+  app_key = "your_app_key"
+  app_secret = "your_app_secret"
+  redirect_uri = "http://localhost:3000/auth/callback"
+
+[server]
+  host = "0.0.0.0"
+  port = 3000
+  admin_port = 3001
+  webhook_path = "/webhook"
+
+[sync]
+  local_base_path = "./sync"
+  dropbox_folder = "/"
+
+[build]
+  command = "zola build"
+  working_directory = "./sync"
+
+[database]
+  path = "./database.db"
+
+[[copy_rules]]
+  source_pattern = "./sync/public/**/*"
+  destination = "./output"
+  recursive = true
