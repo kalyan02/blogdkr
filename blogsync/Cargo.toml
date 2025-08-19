@@ -42,3 +42,6 @@ rpassword = "7.0"
 digest = "0.10.7"
 generic-array = "1.2.0"
 zip = "0.6"
+sea-orm = { version = "2.0.0-rc.3", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"]}
+diesel = { version = "2.1", features = ["sqlite"] }
+dotenvy = "0.15"
