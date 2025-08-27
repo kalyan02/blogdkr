@@ -25,7 +25,7 @@
     <div id="app">
         <!-- Navigation Bar -->
         <div class="py-1 border-b-0 border-gray-100">
-            <div class="max-w-7xl mx-auto px-2 pt-2 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
+            <div :class="'mx-auto px-2 pt-2 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0 ' + editorWidthOptions[editorWidth].containerClass">
                 <!-- Left: Navigation Links -->
                 <div class="flex gap-1 flex-wrap justify-center lg:justify-start" >
                     <a v-for="link in navLinks" :key="link.name" :href="link.href" :target="link.target"  v-if="!distractionFree"
@@ -46,6 +46,11 @@
                             title="Move sidebar below content">
                         {{ sidebarBelow ? '↑' : '↓' }}
                     </button>
+                    <button @click="cycleEditorWidth"
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all"
+                            :title="'Editor width: ' + editorWidthOptions[editorWidth].label">
+                        {{ editorWidthOptions[editorWidth].icon }}
+                    </button>
                     <button @click="toggleDistractionFree"
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
                         {{ distractionFree ? '◑' : '◐' }}
@@ -60,14 +65,13 @@
 
         <!-- Title Bar -->
         <div class="py-4">
-            <div class="max-w-7xl mx-auto px-4">
+            <div :class="'mx-auto px-4 ' + editorWidthOptions[editorWidth].containerClass">
                 <span class="text-sm text-gray-700">Editing: {{ currentFile }}</span>
             </div>
         </div>
 
         <!-- Main Content -->
-        <div class="max-w-7xl mx-auto px-4 flex flex-col gap-6"
-             :class="{ 'lg:flex-row': !sidebarBelow, 'lg:flex-col': sidebarBelow }">
+        <div :class="'mx-auto px-4 flex flex-col gap-6 ' + editorWidthOptions[editorWidth].containerClass + (!sidebarBelow ? ' lg:flex-row' : ' lg:flex-col')">
             <!-- Editor Area -->
             <div class="flex-1">
                 <textarea 
@@ -210,6 +214,7 @@
                     sidebarVisible: true,
                     isDragOver: false,
                     sidebarBelow: false,
+                    editorWidth: 'normal',
                     searchQuery: '',
                     sections: {
                         navigation: true,
@@ -240,7 +245,24 @@
                         { id: 4, title: 'API Documentation' },
                         { id: 5, title: 'Deployment Guide' },
                         { id: 6, title: 'Troubleshooting' }
-                    ]
+                    ],
+                    editorWidthOptions: {
+                        narrow: {
+                            label: 'Narrow',
+                            icon: 'S',
+                            containerClass: 'max-w-4xl'
+                        },
+                        normal: {
+                            label: 'Normal', 
+                            icon: 'M',
+                            containerClass: 'max-w-7xl'
+                        },
+                        wide: {
+                            label: 'Wide',
+                            icon: 'L',
+                            containerClass: 'max-w-none'
+                        }
+                    }
                 }
             },
             computed: {
@@ -275,6 +297,13 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 toggleDistractionFree() {
                     this.distractionFree = !this.distractionFree
+                },
+                cycleEditorWidth() {
+                    const widthKeys = Object.keys(this.editorWidthOptions)
+                    const currentIndex = widthKeys.indexOf(this.editorWidth)
+                    const nextIndex = (currentIndex + 1) % widthKeys.length
+                    this.editorWidth = widthKeys[nextIndex]
+                    this.saveEditorWidthState()
                 },
                 saveContent() {
                     console.log('Saving:', { content: this.content, frontmatter: this.frontmatter })
@@ -400,6 +429,12 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     }
                 },
 
+                saveEditorWidthState() {
+                    if (typeof Storage !== 'undefined') {
+                        localStorage.setItem('oddity-editor-width', this.editorWidth)
+                    }
+                },
+
                 loadSavedStates() {
                     if (typeof Storage !== 'undefined') {
                         // Load sidebar state
@@ -410,6 +445,12 @@ Start writing your content here. The editor is now centered with a fixed maximum
                         const sidebarBelowState = localStorage.getItem('oddity-sidebar-below')
                         if (sidebarBelowState !== null) {
                             this.sidebarBelow = sidebarBelowState === 'true'
+                        }
+
+                        // Load editor width state
+                        const editorWidthState = localStorage.getItem('oddity-editor-width')
+                        if (editorWidthState && this.editorWidthOptions[editorWidthState]) {
+                            this.editorWidth = editorWidthState
                         }
 
                         // Load distraction-free state

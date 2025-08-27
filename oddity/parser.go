@@ -1,0 +1,750 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"html/template"
+	"net/url"
+	"path"
+	"regexp"
+	"strings"
+
+	"github.com/BurntSushi/toml"
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/ast"
+	"github.com/gomarkdown/markdown/html"
+	"github.com/gomarkdown/markdown/parser"
+	"gopkg.in/yaml.v3"
+)
+
+// FrontmatterType represents the type of frontmatter delimiter used
+type FrontmatterType int
+
+const (
+	FrontmatterNone FrontmatterType = iota
+	FrontmatterYAML                 // --- delimited YAML
+	FrontmatterTOML                 // +++ delimited TOML
+)
+
+// FrontmatterData holds parsed frontmatter content and metadata
+type FrontmatterData struct {
+	Type     FrontmatterType
+	Raw      string
+	Data     map[string]interface{}
+	StartPos int
+	EndPos   int
+}
+
+// ParserConfig holds configuration for the markdown parser
+type ParserConfig struct {
+	EnableWikiLinks      bool
+	EnableHashtags       bool
+	EnableWebfinger      bool
+	EnableFrontmatter    bool
+	LazyLoadImages       bool
+	SmartypantsFractions bool
+}
+
+// DefaultParserConfig returns a default parser configuration
+func DefaultParserConfig() *ParserConfig {
+	return &ParserConfig{
+		EnableWikiLinks:      true,
+		EnableHashtags:       true,
+		EnableWebfinger:      false,
+		EnableFrontmatter:    true,
+		LazyLoadImages:       true,
+		SmartypantsFractions: false,
+	}
+}
+
+// ParsedContent holds the complete parsed result
+type ParsedContent struct {
+	Frontmatter *FrontmatterData
+	Body        []byte
+	HTML        template.HTML
+	Hashtags    []string
+	PlainText   string
+	Images      []ImageData
+	WikiLinks   []string
+	Shortcodes  []ShortcodeData
+}
+
+// ShortcodeData represents a parsed shortcode
+type ShortcodeData struct {
+	Name     string `json:"name"`
+	Position int    `json:"position"`
+}
+
+var DefaultWikiLinkifyCallback = func(linkText []byte) ast.Node {
+	link := &ast.Link{
+		Destination: []byte(url.PathEscape(string(linkText))),
+	}
+	ast.AppendChild(link, &ast.Text{
+		Leaf: ast.Leaf{Literal: linkText},
+	})
+	return link
+}
+
+// MarkdownParser provides a clean interface for parsing markdown with frontmatter
+type MarkdownParser struct {
+	config     *ParserConfig
+	parser     *parser.Parser
+	renderer   *html.Renderer
+	hashtags   *[]string
+	shortcodes *[]ShortcodeData
+}
+
+// NewMarkdownParser creates a new parser with the given configuration
+func NewMarkdownParser(config *ParserConfig) *MarkdownParser {
+	if config == nil {
+		config = DefaultParserConfig()
+	}
+
+	mp := &MarkdownParser{
+		config: config,
+	}
+
+	mp.initializeParser()
+	mp.initializeRenderer()
+	return mp
+}
+
+// initializeParser sets up the markdown parser with extensions and inline parsers
+func (mp *MarkdownParser) initializeParser() {
+	extensions := parser.CommonExtensions | parser.AutoHeadingIDs | parser.Attributes
+	if !mp.config.SmartypantsFractions {
+		extensions = extensions &^ parser.MathJax
+	}
+
+	mp.parser = parser.NewWithExtensions(extensions)
+
+	// Register inline parsers based on configuration
+	if mp.config.EnableWikiLinks {
+		mp.createWikiLinkParser(mp.parser)
+	}
+
+	if mp.config.EnableHashtags {
+		hashtagFn, hashtags := mp.hashtagParser()
+		mp.hashtags = hashtags
+		mp.parser.RegisterInline('#', hashtagFn)
+	}
+
+	if mp.config.EnableWebfinger {
+		// TODO: Implement webfinger support
+		// mp.parser.RegisterInline('@', mp.webfingerParser)
+	}
+
+	// Initialize shortcode tracking
+	shortcodes := make([]ShortcodeData, 0)
+	mp.shortcodes = &shortcodes
+
+	// Register shortcode parser
+	mp.parser.RegisterInline('{', mp.shortcodeParser())
+}
+
+type wikiLinkParserConfigResult struct {
+	wikilinks     []string
+	replaceLink   bool
+	replaceLinkFn func(string) string
+}
+
+func (mp *MarkdownParser) createWikiLinkParser(parser *parser.Parser) {
+	prev := parser.RegisterInline('[', nil)
+	parser.RegisterInline('[', mp.wikiLinkParser(prev))
+}
+
+// initializeRenderer sets up the HTML renderer with appropriate flags
+func (mp *MarkdownParser) initializeRenderer() {
+	htmlFlags := html.CommonFlags
+
+	if !mp.config.SmartypantsFractions {
+		htmlFlags = htmlFlags &^ html.SmartypantsFractions
+	}
+
+	if mp.config.LazyLoadImages {
+		htmlFlags = htmlFlags | html.LazyLoadImages
+	}
+
+	opts := html.RendererOptions{Flags: htmlFlags}
+	mp.renderer = html.NewRenderer(opts)
+}
+
+// Parse parses the complete markdown content including frontmatter
+func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
+	result := &ParsedContent{}
+
+	// Extract frontmatter if enabled
+	bodyContent := content
+	if mp.config.EnableFrontmatter {
+		var err error
+		result.Frontmatter, bodyContent, err = mp.ExtractFrontmatter(content)
+		if err != nil {
+			return nil, fmt.Errorf("frontmatter parsing error: %w", err)
+		}
+	}
+
+	result.Body = bodyContent
+
+	// Parse markdown to HTML
+	result.HTML = mp.RenderHTML(bodyContent)
+
+	// Extract hashtags if enabled
+	if mp.config.EnableHashtags && mp.hashtags != nil {
+		result.Hashtags = *mp.hashtags
+		// Reset hashtags for next parse
+		*mp.hashtags = (*mp.hashtags)[:0]
+	}
+
+	// Generate plain text
+	result.PlainText = mp.ExtractPlainText(bodyContent)
+
+	// Extract images
+	result.Images = mp.ExtractImages(bodyContent, "")
+
+	// Extract shortcodes - get from parser state after HTML parsing
+	if mp.shortcodes != nil {
+		result.Shortcodes = *mp.shortcodes
+		// Reset shortcodes for next parse
+		*mp.shortcodes = (*mp.shortcodes)[:0]
+	}
+
+	return result, nil
+}
+
+// ExtractFrontmatter extracts and parses frontmatter from content
+func (mp *MarkdownParser) ExtractFrontmatter(content []byte) (*FrontmatterData, []byte, error) {
+	if len(content) == 0 {
+		return nil, content, nil
+	}
+
+	// Check for YAML frontmatter (---)
+	// Use (?s) flag for . to match newlines
+	if yamlMatch := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\s*\n`).FindSubmatch(content); yamlMatch != nil {
+		frontmatter := &FrontmatterData{
+			Type:     FrontmatterYAML,
+			Raw:      string(yamlMatch[1]),
+			StartPos: 0,
+			EndPos:   len(yamlMatch[0]),
+			Data:     make(map[string]interface{}),
+		}
+
+		if err := yaml.Unmarshal(yamlMatch[1], &frontmatter.Data); err != nil {
+			return nil, content, fmt.Errorf("failed to parse YAML frontmatter: %w", err)
+		}
+
+		body := content[frontmatter.EndPos:]
+		return frontmatter, body, nil
+	}
+
+	// Check for TOML frontmatter (+++)
+	// Use (?s) flag for . to match newlines
+	if tomlMatch := regexp.MustCompile(`(?s)^\+\+\+\s*\n(.*?)\n\+\+\+\s*\n`).FindSubmatch(content); tomlMatch != nil {
+		frontmatter := &FrontmatterData{
+			Type:     FrontmatterTOML,
+			Raw:      string(tomlMatch[1]),
+			StartPos: 0,
+			EndPos:   len(tomlMatch[0]),
+			Data:     make(map[string]interface{}),
+		}
+
+		if err := toml.Unmarshal(tomlMatch[1], &frontmatter.Data); err != nil {
+			return nil, content, fmt.Errorf("failed to parse TOML frontmatter: %w", err)
+		}
+
+		body := content[frontmatter.EndPos:]
+		return frontmatter, body, nil
+	}
+
+	// No frontmatter found
+	return nil, content, nil
+}
+
+// RenderHTML converts markdown content to HTML
+func (mp *MarkdownParser) RenderHTML(content []byte) template.HTML {
+	htmlBytes := markdown.ToHTML(content, mp.parser, mp.renderer)
+	return template.HTML(htmlBytes)
+}
+
+// ExtractPlainText converts markdown to plain text, removing all formatting
+func (mp *MarkdownParser) ExtractPlainText(content []byte) string {
+	parser := parser.New()
+	doc := markdown.Parse(content, parser)
+
+	var buffer bytes.Buffer
+	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
+		if entering {
+			if leaf := node.AsLeaf(); leaf != nil {
+				buffer.Write(leaf.Literal)
+				buffer.WriteByte(' ')
+			}
+		}
+		return ast.GoToNext
+	})
+
+	// Clean up the text
+	text := buffer.String()
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.TrimSpace(text)
+
+	// Remove multiple spaces
+	spaceRegex := regexp.MustCompile(`\s+`)
+	text = spaceRegex.ReplaceAllString(text, " ")
+
+	return text
+}
+
+// ExtractImages finds all images in the markdown content
+func (mp *MarkdownParser) ExtractImages(content []byte, dir string) []ImageData {
+	var images []ImageData
+	parser := parser.New()
+	doc := markdown.Parse(content, parser)
+
+	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
+		if entering {
+			if img, ok := node.(*ast.Image); ok {
+				text := mp.nodeToString(img)
+				if len(text) > 0 {
+					name := path.Join(dir, string(img.Destination))
+					image := ImageData{
+						Title: text,
+						Name:  name,
+					}
+					images = append(images, image)
+				}
+				return ast.SkipChildren
+			}
+		}
+		return ast.GoToNext
+	})
+
+	return images
+}
+
+// ExtractHeadings extracts all headings from the markdown content
+func (mp *MarkdownParser) ExtractHeadings(content []byte) []HeadingData {
+	return ExtractHeadings(content)
+}
+
+// wikiLinkParser creates a parser for [[wiki links]]
+func (mp *MarkdownParser) wikiLinkParser(fallback func(*parser.Parser, []byte, int) (int, ast.Node)) func(*parser.Parser, []byte, int) (int, ast.Node) {
+	return mp.wikiLinkCallbackParser(DefaultWikiLinkifyCallback, fallback)
+}
+
+func (mp *MarkdownParser) wikiLinkCallbackParser(cb func([]byte) ast.Node, fallback func(*parser.Parser, []byte, int) (int, ast.Node)) func(*parser.Parser, []byte, int) (int, ast.Node) {
+	return func(p *parser.Parser, original []byte, offset int) (int, ast.Node) {
+		data := original[offset:]
+		n := len(data)
+
+		// Minimum: [[X]]
+		if n < 5 || data[1] != '[' {
+			return fallback(p, original, offset)
+		}
+
+		// Find the closing ]]
+		i := 2
+		for i+1 < n && !(data[i] == ']' && data[i+1] == ']') {
+			i++
+		}
+
+		if i+1 >= n {
+			return fallback(p, original, offset)
+		}
+
+		linkText := data[2:i]
+
+		return i + 2, cb(linkText)
+	}
+}
+
+// hashtagParser creates a parser for #hashtags
+func (mp *MarkdownParser) hashtagParser() (func(*parser.Parser, []byte, int) (int, ast.Node), *[]string) {
+	hashtags := make([]string, 0)
+
+	parseFunc := func(p *parser.Parser, data []byte, offset int) (int, ast.Node) {
+		if p.InsideLink {
+			return 0, nil
+		}
+
+		data = data[offset:]
+		n := len(data)
+
+		// Find the end of the hashtag
+		i := 1 // Skip the #
+		for i < n && !parser.IsSpace(data[i]) && data[i] != '\n' && isHashtagChar(data[i]) {
+			i++
+		}
+
+		if i <= 1 {
+			return 0, nil
+		}
+
+		hashtagText := string(data[1:i])
+		hashtags = append(hashtags, hashtagText)
+
+		link := &ast.Link{
+			AdditionalAttributes: []string{`class="tag"`},
+			Destination:          []byte(fmt.Sprintf("/search/?q=%%23%s", hashtagText)),
+		}
+
+		// Replace underscores with spaces in display text
+		displayText := strings.ReplaceAll(string(data[0:i]), "_", " ")
+		ast.AppendChild(link, &ast.Text{
+			Leaf: ast.Leaf{Literal: []byte(displayText)},
+		})
+
+		return i, link
+	}
+
+	return parseFunc, &hashtags
+}
+
+// isHashtagChar checks if a character is valid for hashtags
+func isHashtagChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '_' || c == '-'
+}
+
+// shortcodeParser creates a parser for {{shortcode}} syntax
+func (mp *MarkdownParser) shortcodeParser() func(*parser.Parser, []byte, int) (int, ast.Node) {
+	return func(p *parser.Parser, data []byte, offset int) (int, ast.Node) {
+		data = data[offset:]
+		n := len(data)
+
+		// Minimum: {{x}}
+		if n < 5 || data[1] != '{' {
+			return 0, nil
+		}
+
+		// Find the closing }}
+		i := 2
+		for i+1 < n && !(data[i] == '}' && data[i+1] == '}') {
+			i++
+		}
+
+		if i+1 >= n {
+			return 0, nil
+		}
+
+		shortcodeName := strings.TrimSpace(string(data[2:i]))
+
+		// Skip empty shortcodes
+		if shortcodeName == "" {
+			return 0, nil
+		}
+
+		// Record the shortcode
+		if mp.shortcodes != nil {
+			*mp.shortcodes = append(*mp.shortcodes, ShortcodeData{
+				Name:     shortcodeName,
+				Position: offset,
+			})
+		}
+
+		// Return a placeholder span for now - rendering happens separately
+		return i + 2, &ast.HTMLSpan{
+			Leaf: ast.Leaf{Literal: []byte("{{" + shortcodeName + "}}")},
+		}
+	}
+}
+
+// nodeToString extracts text content from an AST node
+func (mp *MarkdownParser) nodeToString(node ast.Node) string {
+	var buffer bytes.Buffer
+	ast.WalkFunc(node, func(node ast.Node, entering bool) ast.WalkStatus {
+		if entering {
+			if text, ok := node.(*ast.Text); ok {
+				buffer.Write(text.Literal)
+			}
+		}
+		return ast.GoToNext
+	})
+	return buffer.String()
+}
+
+// Legacy functions for backwards compatibility
+
+// renderHtml updates a Page with parsed HTML content
+func (p *Page) renderHtml() {
+	parser := NewMarkdownParser(DefaultParserConfig())
+	content, err := parser.Parse(p.Body)
+	if err != nil {
+		// For backwards compatibility, continue with basic parsing on error
+		p.HTML = template.HTML(markdown.ToHTML(p.Body, parser.parser, parser.renderer))
+		return
+	}
+
+	p.HTML = content.HTML
+	p.Hashtags = content.Hashtags
+}
+
+// plainText renders the Page.Body to plain text
+func (p *Page) plainText() string {
+	parser := NewMarkdownParser(DefaultParserConfig())
+	content, err := parser.Parse(p.Body)
+	if err != nil {
+		// Fallback to basic plain text conversion
+		return string(p.Body)
+	}
+	return content.PlainText
+}
+
+// images returns an array of ImageData found in the page
+func (p *Page) images() []ImageData {
+	parser := NewMarkdownParser(DefaultParserConfig())
+	content, err := parser.Parse(p.Body)
+	if err != nil {
+		return []ImageData{}
+	}
+	return content.Images
+}
+
+// hashtags extracts hashtags from markdown content
+func hashtags(content []byte) []string {
+	parser := NewMarkdownParser(DefaultParserConfig())
+	parsed, err := parser.Parse(content)
+	if err != nil {
+		return []string{}
+	}
+	return parsed.Hashtags
+}
+
+// Utility functions for extracting specific data
+
+// ExtractFrontmatter extracts and parses frontmatter from content without full parsing
+func ExtractFrontmatter(content []byte) (*FrontmatterData, []byte, error) {
+	parser := NewMarkdownParser(DefaultParserConfig())
+	return parser.ExtractFrontmatter(content)
+}
+
+// ExtractPlainText extracts plain text from markdown content
+func ExtractPlainText(content []byte) string {
+	parser := NewMarkdownParser(DefaultParserConfig())
+	return parser.ExtractPlainText(content)
+}
+
+// ExtractHashtags extracts all hashtags from markdown content
+func ExtractHashtags(content []byte) []string {
+	config := DefaultParserConfig()
+	config.EnableWikiLinks = false // Focus only on hashtags
+	parser := NewMarkdownParser(config)
+
+	// Parse content to extract hashtags
+	parsed, err := parser.Parse(content)
+	if err != nil {
+		return []string{}
+	}
+	return parsed.Hashtags
+}
+
+// ExtractImages extracts all images from markdown content
+func ExtractImages(content []byte, baseDir string) []ImageData {
+	parser := NewMarkdownParser(DefaultParserConfig())
+	return parser.ExtractImages(content, baseDir)
+}
+
+// ExtractLinks extracts all regular markdown links from content
+func ExtractLinks(content []byte) []LinkData {
+	var links []LinkData
+	parser := parser.New()
+	doc := markdown.Parse(content, parser)
+
+	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
+		if entering {
+			if link, ok := node.(*ast.Link); ok {
+				text := extractNodeText(link)
+				linkData := LinkData{
+					Text: text,
+					URL:  string(link.Destination),
+				}
+				if len(link.Title) > 0 {
+					linkData.Title = string(link.Title)
+				}
+				links = append(links, linkData)
+				return ast.SkipChildren
+			}
+		}
+		return ast.GoToNext
+	})
+
+	return links
+}
+
+// ExtractHeadings extracts all headings from markdown content
+func ExtractHeadings(content []byte) []HeadingData {
+	var headings []HeadingData
+	parser := parser.New()
+	doc := markdown.Parse(content, parser)
+
+	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
+		if entering {
+			if heading, ok := node.(*ast.Heading); ok {
+				text := extractNodeText(heading)
+				headingData := HeadingData{
+					Level: heading.Level,
+					Text:  text,
+				}
+				if len(heading.HeadingID) > 0 {
+					headingData.ID = string(heading.HeadingID)
+				}
+				headings = append(headings, headingData)
+				return ast.SkipChildren
+			}
+		}
+		return ast.GoToNext
+	})
+
+	return headings
+}
+
+// ExtractCodeBlocks extracts all code blocks from markdown content
+func ExtractCodeBlocks(content []byte) []CodeBlockData {
+	var codeBlocks []CodeBlockData
+	parser := parser.New()
+	doc := markdown.Parse(content, parser)
+
+	ast.WalkFunc(doc, func(node ast.Node, entering bool) ast.WalkStatus {
+		if entering {
+			if codeBlock, ok := node.(*ast.CodeBlock); ok {
+				code := CodeBlockData{
+					Language: string(codeBlock.Info),
+					Code:     string(codeBlock.Literal),
+				}
+				codeBlocks = append(codeBlocks, code)
+			}
+		}
+		return ast.GoToNext
+	})
+
+	return codeBlocks
+}
+
+// ExtractWordCount counts words in the plain text version of markdown content
+func ExtractWordCount(content []byte) int {
+	plainText := ExtractPlainText(content)
+	if len(plainText) == 0 {
+		return 0
+	}
+
+	// Split by whitespace and count non-empty words
+	words := strings.Fields(plainText)
+	return len(words)
+}
+
+// ExtractReadingTime estimates reading time in minutes (assuming 200 words per minute)
+func ExtractReadingTime(content []byte) int {
+	wordCount := ExtractWordCount(content)
+	readingTime := (wordCount + 199) / 200 // Round up
+	if readingTime < 1 {
+		return 1
+	}
+	return readingTime
+}
+
+// Helper data structures for extraction functions
+
+// LinkData represents a markdown link
+type LinkData struct {
+	Text  string `json:"text"`
+	URL   string `json:"url"`
+	Title string `json:"title,omitempty"`
+}
+
+// HeadingData represents a markdown heading
+type HeadingData struct {
+	Level int    `json:"level"`
+	Text  string `json:"text"`
+	ID    string `json:"id,omitempty"`
+}
+
+// CodeBlockData represents a code block
+type CodeBlockData struct {
+	Language string `json:"language,omitempty"`
+	Code     string `json:"code"`
+}
+
+// extractNodeText is a helper function to extract text from AST nodes
+func extractNodeText(node ast.Node) string {
+	var buffer bytes.Buffer
+	ast.WalkFunc(node, func(node ast.Node, entering bool) ast.WalkStatus {
+		if entering {
+			if text, ok := node.(*ast.Text); ok {
+				buffer.Write(text.Literal)
+			}
+		}
+		return ast.GoToNext
+	})
+	return buffer.String()
+}
+
+// Legacy utility functions
+
+// toString extracts text from an AST node (legacy compatibility)
+func toString(node ast.Node) string {
+	return extractNodeText(node)
+}
+
+// unsafeBytes converts bytes to template.HTML without sanitization
+func unsafeBytes(bytes []byte) template.HTML {
+	return template.HTML(bytes)
+}
+
+// Helper methods for FrontmatterData
+
+// GetString safely gets a string value from frontmatter data
+func (fm *FrontmatterData) GetString(key string) string {
+	if fm == nil || fm.Data == nil {
+		return ""
+	}
+	if val, ok := fm.Data[key]; ok {
+		if str, ok := val.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+// GetStringSlice safely gets a string slice from frontmatter data
+func (fm *FrontmatterData) GetStringSlice(key string) []string {
+	if fm == nil || fm.Data == nil {
+		return nil
+	}
+	if val, ok := fm.Data[key]; ok {
+		switch v := val.(type) {
+		case []string:
+			return v
+		case []interface{}:
+			result := make([]string, 0, len(v))
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					result = append(result, str)
+				}
+			}
+			return result
+		}
+	}
+	return nil
+}
+
+// GetBool safely gets a boolean value from frontmatter data
+func (fm *FrontmatterData) GetBool(key string) bool {
+	if fm == nil || fm.Data == nil {
+		return false
+	}
+	if val, ok := fm.Data[key]; ok {
+		if b, ok := val.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+// HasKey checks if a key exists in frontmatter data
+func (fm *FrontmatterData) HasKey(key string) bool {
+	if fm == nil || fm.Data == nil {
+		return false
+	}
+	_, exists := fm.Data[key]
+	return exists
+}
