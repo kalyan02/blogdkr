@@ -24,22 +24,27 @@
 <body class="font-mono bg-white min-h-screen">
     <div id="app">
         <!-- Navigation Bar -->
-        <div class="py-1 border-b border-gray-100">
-            <div class="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
+        <div class="py-1 border-b-0 border-gray-100">
+            <div class="max-w-7xl mx-auto px-2 pt-2 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
                 <!-- Left: Navigation Links -->
-                <div class="flex gap-2 flex-wrap justify-center lg:justify-start">
-                    <a v-for="link in navLinks" :key="link.name" :href="link.href" :target="link.target" 
-                       class="text-gray-600 text-xs px-2 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                <div class="flex gap-1 flex-wrap justify-center lg:justify-start" >
+                    <a v-for="link in navLinks" :key="link.name" :href="link.href" :target="link.target"  v-if="!distractionFree"
+                       class="text-gray-600 text-xs px-1 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors"
                        :class="{ 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white': link.primary }">
                         {{ link.name }}
                     </a>
                 </div>
-                
+
                 <!-- Right: Controls -->
                 <div class="flex gap-1 justify-center">
                     <button @click="toggleSidebar" 
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
                         {{ sidebarVisible ? '✕' : '≡' }}
+                    </button>
+                    <button @click="toggleSidebarPosition" 
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all"
+                            title="Move sidebar below content">
+                        {{ sidebarBelow ? '↑' : '↓' }}
                     </button>
                     <button @click="toggleDistractionFree" 
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
@@ -61,9 +66,10 @@
         </div>
 
         <!-- Main Content -->
-        <div class="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-6">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col gap-6" 
+             :class="{ 'lg:flex-row': !sidebarBelow, 'lg:flex-col': sidebarBelow }">
             <!-- Editor Area -->
-            <div class="flex-1 max-w-4xl">
+            <div class="flex-1">
                 <textarea 
                     v-model="content"
                     @input="autoResize"
@@ -74,7 +80,12 @@
             </div>
 
             <!-- Sidebar -->
-            <div v-if="sidebarVisible && !distractionFree" class="w-full lg:w-64 flex-shrink-0 lg:order-2 order-2 border-t lg:border-t-0 pt-6 lg:pt-0">
+            <div v-if="sidebarVisible && !distractionFree" 
+                 class="w-full flex-shrink-0 border-t pt-6" 
+                 :class="{ 
+                     'lg:w-64 lg:border-t-0 lg:pt-0': !sidebarBelow,
+                     'lg:w-full lg:mx-auto lg:border-t lg:pt-6': sidebarBelow
+                 }">
                 
                 <!-- Navigation Section -->
                 <div class="mb-6">
@@ -198,6 +209,7 @@
                     distractionFree: false,
                     sidebarVisible: true,
                     isDragOver: false,
+                    sidebarBelow: false,
                     searchQuery: '',
                     sections: {
                         navigation: true,
@@ -207,10 +219,7 @@
                     },
                     navLinks: [
                         { name: 'Dashboard', href: '/admin' },
-                        { name: 'Posts', href: '/admin/posts' },
-                        { name: 'Pages', href: '/admin/pages' },
                         { name: 'Files', href: '/admin/files' },
-                        { name: 'Preview', href: '/preview/untitled', target: '_blank', primary: true }
                     ],
                     navigationItems: [
                         { name: 'Dashboard', href: '/admin', emoji: '📊' },
@@ -257,7 +266,12 @@ Start writing your content here. The editor is now centered with a fixed maximum
             },
             methods: {
                 toggleSidebar() {
-                    this.sidebarVisible = !this.sidebarVisible
+                    this.sidebarVisible = !this.sidebarVisible;
+                    this.saveSidebarState()
+                },
+                toggleSidebarPosition() {
+                    this.sidebarBelow = !this.sidebarBelow
+                    console.log('Toggling sidebar position:', this.sidebarBelow)
                 },
                 toggleDistractionFree() {
                     this.distractionFree = !this.distractionFree
@@ -268,6 +282,7 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 toggleSection(section) {
                     this.sections[section] = !this.sections[section]
+                    this.saveSectionStates();
                 },
                 autoResize(event) {
                     const textarea = event.target
@@ -364,8 +379,60 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 performSearch() {
                     console.log('Searching for:', this.searchQuery)
+                },
+                                // State persistence helpers
+                saveSidebarState() {
+                    if (typeof Storage !== 'undefined') {
+                        localStorage.setItem('oddity-sidebar-visible', this.sidebarVisible)
+                    }
+                },
+
+                saveDistractionFreeState() {
+                    if (typeof Storage !== 'undefined') {
+                        localStorage.setItem('oddity-distraction-free', this.distractionFree)
+                    }
+                },
+
+                saveSectionStates() {
+                    if (typeof Storage !== 'undefined') {
+                        localStorage.setItem('oddity-sections', JSON.stringify(this.sections))
+                    }
+                },
+
+                loadSavedStates() {
+                    if (typeof Storage !== 'undefined') {
+                        // Load sidebar state
+                        const sidebarState = localStorage.getItem('oddity-sidebar-visible')
+                        if (sidebarState !== null) {
+                            this.sidebarVisible = sidebarState === 'true'
+                        }
+
+                        // Load distraction-free state
+                        const distractionFreeState = localStorage.getItem('oddity-distraction-free')
+                        if (distractionFreeState !== null) {
+                            this.distractionFree = distractionFreeState === 'true'
+                        }
+
+                        // Load section states
+                        const sectionsState = localStorage.getItem('oddity-sections')
+                        if (sectionsState) {
+                            try {
+                                this.sections = { ...this.sections, ...JSON.parse(sectionsState) }
+                            } catch (e) {
+                                console.warn('Failed to load section states:', e)
+                            }
+                        }
+                    }
                 }
-            }
+            },
+            mounted() {
+                this.loadSavedStates()
+                this.$nextTick(() => {
+                    if (this.$refs.editor) {
+                        this.autoResize({ target: this.$refs.editor })
+                    }
+                })
+            },
         }).mount('#app')
     </script>
 </body>

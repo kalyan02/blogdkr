@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oddity Editor - Simple</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: white;
+            min-height: 100vh;
+        }
+        
+        /* Top navigation */
+        .nav-bar {
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .nav-link {
+            text-decoration: none;
+            color: #666;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .nav-link.primary {
+            background: #007acc;
+            color: white;
+        }
+        
+        .nav-link.primary:hover {
+            background: #005a9e;
+        }
+        
+        .nav-controls {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .control-btn {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 4px 8px;
+            font-size: 11px;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #f5f5f5;
+            border-color: #bbb;
+        }
+        
+        .control-btn.save {
+            color: #28a745;
+        }
+        
+        .control-btn.save:hover {
+            background: #28a745;
+            color: white;
+        }
+        
+        /* Title */
+        .title-bar {
+            padding: 20px 0;
+        }
+        
+        .title-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Main layout */
+        .main-layout {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            gap: 20px;
+        }
+        
+        /* Editor */
+        .editor-container {
+            flex: 1;
+            max-width: 800px;
+        }
+        
+        .editor {
+            width: 100%;
+            min-height: 500px;
+            border: none;
+            outline: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 0;
+            resize: none;
+            background: transparent;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .nav-container {
+                padding: 0 16px;
+                flex-direction: column;
+                gap: 8px;
+                align-items: stretch;
+            }
+            
+            .nav-links {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            
+            .nav-controls {
+                justify-content: center;
+            }
+            
+            .title-container {
+                padding: 0 16px;
+            }
+            
+            .main-layout {
+                flex-direction: column;
+                padding: 0 16px;
+                gap: 16px;
+            }
+            
+            .editor-container {
+                max-width: none;
+            }
+            
+            .sidebar {
+                width: 100%;
+                order: 2;
+                border-top: 1px solid #e5e5e5;
+                padding-top: 20px;
+            }
+            
+            .editor {
+                font-size: 16px;
+                padding: 16px;
+                min-height: 400px;
+            }
+        }
+        
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .main-layout {
+                max-width: 100%;
+                padding: 0 16px;
+            }
+            
+            .editor-container {
+                max-width: 600px;
+            }
+            
+            .sidebar {
+                width: 260px;
+            }
+        }
+        
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-header {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            font-weight: 600;
+            margin-bottom: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .section-header:hover {
+            color: #333;
+        }
+        
+        .section-arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+        
+        .section-collapsed .section-arrow {
+            transform: rotate(-90deg);
+        }
+        
+        .section-content {
+            display: block;
+        }
+        
+        .section-collapsed .section-content {
+            display: none;
+        }
+        
+        /* Navigation items */
+        .nav-items {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .nav-item {
+            text-decoration: none;
+            color: #666;
+            font-size: 11px;
+            padding: 6px 8px;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+        
+        .nav-item:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .nav-item.primary {
+            background: #007acc;
+            color: white;
+        }
+        
+        .nav-item.primary:hover {
+            background: #005a9e;
+        }
+        
+        /* Front matter */
+        .frontmatter-textarea {
+            width: 100%;
+            height: 100px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid #e0e0e0;
+            padding: 8px;
+            border-radius: 3px;
+            background: #fafafa;
+            resize: vertical;
+            outline: none;
+        }
+        
+        .frontmatter-textarea:focus {
+            border-color: #007acc;
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.1);
+        }
+        
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed #ddd;
+            padding: 16px;
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 4px;
+            background: #f9f9f9;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+        
+        .upload-area:hover {
+            border-color: #007acc;
+            background: #f6f8fa;
+        }
+        
+        .upload-area.dragover {
+            border-color: #007acc;
+            background: #f0f8ff;
+            color: #007acc;
+        }
+        
+        /* Files */
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            padding: 4px 6px;
+            font-size: 11px;
+            margin-bottom: 2px;
+            border-radius: 3px;
+            position: relative;
+        }
+        
+        .file-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .file-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .file-name {
+            cursor: pointer;
+            color: #333;
+        }
+        
+        .file-name:hover {
+            color: #007acc;
+        }
+        
+        .file-menu-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #999;
+            font-size: 10px;
+            padding: 2px 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .file-item:hover .file-menu-btn {
+            opacity: 1;
+        }
+        
+        .file-menu-btn:hover {
+            color: #666;
+        }
+        
+        .file-type-img::before {
+            content: "[IMG] ";
+            color: #007acc;
+            font-weight: 600;
+        }
+        
+        .file-type-file::before {
+            content: "[FILE] ";
+            color: #666;
+            font-weight: 600;
+        }
+        
+        /* Search */
+        .search-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 3px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            background: #fafafa;
+            outline: none;
+            margin-bottom: 12px;
+        }
+        
+        .search-input:focus {
+            border-color: #007acc;
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.1);
+        }
+        
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .search-result {
+            padding: 4px 6px;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 3px;
+            margin-bottom: 2px;
+        }
+        
+        .search-result:hover {
+            background: #f5f5f5;
+        }
+        
+        .search-result::before {
+            content: "[PAGE] ";
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        /* Hidden */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation Bar -->
+        <div class="nav-bar">
+            <div class="nav-container">
+                <div class="nav-links">
+                    <a v-for="link in navLinks" :key="link.name" :href="link.href" :target="link.target"
+                       class="nav-link" :class="{ 'primary': link.primary }">
+                        {{ link.name }}
+                    </a>
+                </div>
+                <div class="nav-controls">
+                    <button @click="toggleSidebar" class="control-btn">
+                        {{ sidebarVisible ? '✕' : '≡' }}
+                    </button>
+                    <button @click="toggleDistractionFree" class="control-btn">
+                        {{ distractionFree ? '◑' : '◐' }}
+                    </button>
+                    <button @click="saveContent" class="control-btn save">💾</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Title Bar -->
+        <div class="title-bar">
+            <div class="title-container">
+                <span>Editing: {{ currentFile }}</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-layout">
+            <!-- Editor -->
+            <div class="editor-container">
+                <textarea 
+                    v-model="content"
+                    @input="autoResize"
+                    ref="editor"
+                    class="editor"
+                    :placeholder="editorPlaceholder">
+                </textarea>
+            </div>
+
+            <!-- Sidebar -->
+            <div v-show="sidebarVisible && !distractionFree" class="sidebar">
+                
+                <!-- Navigation Section -->
+                <div class="sidebar-section">
+                    <div class="section-header" @click="toggleSection('navigation')">
+                        Navigation
+                        <span class="section-arrow">▼</span>
+                    </div>
+                    <div class="section-content" :class="{ 'hidden': !sections.navigation }">
+                        <div class="nav-items">
+                            <a v-for="item in navigationItems" :key="item.name" 
+                               :href="item.href" :target="item.target"
+                               class="nav-item" :class="{ 'primary': item.primary }">
+                                {{ item.emoji }} {{ item.name }}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Front Matter Section -->
+                <div class="sidebar-section">
+                    <div class="section-header" @click="toggleSection('frontmatter')">
+                        Front Matter
+                        <span class="section-arrow">▼</span>
+                    </div>
+                    <div class="section-content" :class="{ 'hidden': !sections.frontmatter }">
+                        <textarea v-model="frontmatter" class="frontmatter-textarea"
+                                  placeholder="title: My Post&#10;tags: [blog, markdown]&#10;date: 2024-01-01&#10;public: true">
+                        </textarea>
+                    </div>
+                </div>
+
+                <!-- File Upload Section -->
+                <div class="sidebar-section">
+                    <div class="section-header" @click="toggleSection('fileupload')">
+                        File Upload
+                        <span class="section-arrow">▼</span>
+                    </div>
+                    <div class="section-content" :class="{ 'hidden': !sections.fileupload }">
+                        <div class="upload-area" @click="triggerFileInput" 
+                             @drop="handleDrop" @dragover.prevent @dragenter.prevent @dragleave.prevent
+                             :class="{ 'dragover': isDragOver }">
+                            Drop files here or click to upload
+                        </div>
+                        <input ref="fileInput" type="file" multiple class="hidden" @change="handleFileSelect">
+                        
+                        <div class="file-list">
+                            <div v-for="file in files" :key="file.id" class="file-item">
+                                <div class="file-header">
+                                    <span class="file-name" :class="`file-type-${file.type}`" @click="insertFileLink(file)">
+                                        {{ file.name }}
+                                    </span>
+                                    <button class="file-menu-btn" @click="renameFile(file)">✏️</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Page Search Section -->
+                <div class="sidebar-section">
+                    <div class="section-header" @click="toggleSection('search')">
+                        Page Search
+                        <span class="section-arrow">▼</span>
+                    </div>
+                    <div class="section-content" :class="{ 'hidden': !sections.search }">
+                        <input v-model="searchQuery" @input="performSearch" 
+                               type="text" placeholder="Search pages..." class="search-input">
+                        
+                        <div class="search-results">
+                            <div v-for="result in filteredSearchResults" :key="result.id" 
+                                 class="search-result" @click="insertPageLink(result)">
+                                {{ result.title }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+        
+        createApp({
+            data() {
+                return {
+                    content: '',
+                    frontmatter: 'title: My Post\ntags: [blog, markdown]\ndate: 2024-01-01\npublic: true',
+                    currentFile: 'untitled.md',
+                    distractionFree: false,
+                    sidebarVisible: true,
+                    isDragOver: false,
+                    searchQuery: '',
+                    sections: {
+                        navigation: true,
+                        frontmatter: true,
+                        fileupload: true,
+                        search: true
+                    },
+                    navLinks: [
+                        { name: 'Dashboard', href: '/admin' },
+                        { name: 'Posts', href: '/admin/posts' },
+                        { name: 'Pages', href: '/admin/pages' },
+                        { name: 'Files', href: '/admin/files' },
+                        { name: 'Preview', href: '/preview/untitled', target: '_blank', primary: true }
+                    ],
+                    navigationItems: [
+                        { name: 'Dashboard', href: '/admin', emoji: '📊' },
+                        { name: 'All Posts', href: '/admin/posts', emoji: '📝' },
+                        { name: 'Pages', href: '/admin/pages', emoji: '📄' },
+                        { name: 'Files', href: '/admin/files', emoji: '🗂️' },
+                        { name: 'Preview', href: '/preview/untitled', target: '_blank', emoji: '👁️', primary: true }
+                    ],
+                    files: [
+                        { id: 1, name: 'image1.jpg', type: 'img' },
+                        { id: 2, name: 'document.pdf', type: 'file' },
+                        { id: 3, name: 'screenshot.png', type: 'img' }
+                    ],
+                    searchResults: [
+                        { id: 1, title: 'Getting Started' },
+                        { id: 2, title: 'Features Overview' },
+                        { id: 3, title: 'Configuration' },
+                        { id: 4, title: 'API Documentation' },
+                        { id: 5, title: 'Deployment Guide' },
+                        { id: 6, title: 'Troubleshooting' }
+                    ]
+                }
+            },
+            computed: {
+                editorPlaceholder() {
+                    return `# Your markdown content here...
+
+## Features
+- Write in markdown
+- Upload files via sidebar
+- Search and link pages
+- Live preview available
+
+Start writing your content here. The editor is now centered with a fixed maximum width for better readability and focus.`
+                },
+                filteredSearchResults() {
+                    if (!this.searchQuery.trim()) {
+                        return this.searchResults
+                    }
+                    return this.searchResults.filter(result => 
+                        result.title.toLowerCase().includes(this.searchQuery.toLowerCase())
+                    )
+                }
+            },
+            methods: {
+                toggleSidebar() {
+                    this.sidebarVisible = !this.sidebarVisible
+                },
+                toggleDistractionFree() {
+                    this.distractionFree = !this.distractionFree
+                },
+                saveContent() {
+                    alert('Content saved!')
+                },
+                toggleSection(section) {
+                    this.sections[section] = !this.sections[section]
+                    const arrow = document.querySelector(`[data-section="${section}"] .section-arrow`)
+                    if (arrow) {
+                        arrow.style.transform = this.sections[section] ? 'rotate(0deg)' : 'rotate(-90deg)'
+                    }
+                },
+                autoResize(event) {
+                    const textarea = event.target
+                    textarea.style.height = 'auto'
+                    textarea.style.height = Math.max(500, textarea.scrollHeight) + 'px'
+                },
+                triggerFileInput() {
+                    this.$refs.fileInput.click()
+                },
+                handleFileSelect(event) {
+                    // Handle file selection
+                },
+                handleDrop(event) {
+                    event.preventDefault()
+                    this.isDragOver = false
+                    // Handle file drop
+                },
+                renameFile(file) {
+                    const newName = prompt('New filename:', file.name)
+                    if (newName) file.name = newName
+                },
+                insertFileLink(file) {
+                    const link = file.type === 'img' ? `![${file.name}](${file.name})` : `[${file.name}](${file.name})`
+                    this.insertAtCursor(link)
+                },
+                insertPageLink(page) {
+                    const link = `[${page.title}](${page.title.toLowerCase().replace(/\s+/g, '-')})`
+                    this.insertAtCursor(link)
+                },
+                insertAtCursor(text) {
+                    const textarea = this.$refs.editor
+                    const start = textarea.selectionStart
+                    const end = textarea.selectionEnd
+                    this.content = this.content.substring(0, start) + text + this.content.substring(end)
+                    this.$nextTick(() => {
+                        textarea.focus()
+                        textarea.setSelectionRange(start + text.length, start + text.length)
+                    })
+                },
+                performSearch() {
+                    // Search is handled by computed property
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
