@@ -218,11 +218,25 @@
         
         /* Desktop: hide mobile menu elements */
         .menu-toggle {
-            display: none;
+            display: none !important;
         }
         
         .mobile-menu {
-            display: none;
+            display: none !important;
+        }
+        
+        /* Wide screen optimization */
+        @media (min-width: 1400px) {
+            .main-content {
+                justify-content: flex-start;
+                padding-left: calc(50vw - 400px);
+            }
+            
+            .toolbar-content {
+                margin: 0 auto;
+                max-width: 800px;
+                padding: 0 32px;
+            }
         }
         
         /* Mobile responsive */
