@@ -5,4 +5,5 @@
 /caddy/logs
 /caddy/config
 /public_html
-/sync
+/sync./idea
+/.idea
