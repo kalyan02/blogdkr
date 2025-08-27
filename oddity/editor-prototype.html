@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oddity Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; height: 100vh; }
+        
+        .editor-container { height: 100vh; display: flex; flex-direction: column; }
+        .toolbar { background: #f5f5f5; padding: 8px; border-bottom: 1px solid #ddd; flex-shrink: 0; display: flex; align-items: center; justify-content: between; }
+        .toolbar-left { display: flex; align-items: center; gap: 12px; }
+        .toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+        .nav-link { color: #666; text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 3px; }
+        .nav-link:hover { background: #e6e6e6; color: #333; }
+        .nav-link.primary { background: #007acc; color: white; }
+        .nav-link.primary:hover { background: #005a9e; }
+        .editor-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        
+        /* Mobile-first: vertical stack */
+        .editor { flex: 1; padding: 8px; min-height: 0; display: flex; justify-content: center; }
+        .editor textarea { 
+            width: 100%; 
+            max-width: 100%; 
+            height: 100%; 
+            border: none; 
+            outline: none; 
+            font-family: 'SF Mono', monospace; 
+            font-size: 16px; 
+            resize: none; 
+        }
+        
+        .sidebar { background: #f9f9f9; border-top: 1px solid #ddd; padding: 15px; max-height: 40vh; overflow-y: auto; transition: all 0.3s ease; }
+        .sidebar.collapsed { max-height: 0; padding: 0; border: none; overflow: hidden; }
+        
+        /* Desktop: horizontal split */
+        @media (min-width: 769px) {
+            .editor-main { flex-direction: row; }
+            .editor { padding: 20px; }
+            .editor textarea { 
+                font-size: 14px; 
+                max-width: 800px; 
+            }
+            .sidebar { 
+                width: 300px; 
+                max-height: none; 
+                border-top: none; 
+                border-left: 1px solid #ddd; 
+                flex-shrink: 0;
+            }
+        }
+        
+        .section { margin-bottom: 20px; }
+        .section h3 { font-size: 13px; text-transform: uppercase; color: #666; margin-bottom: 8px; }
+        
+        .frontmatter textarea { width: 100%; height: 80px; font-size: 12px; border: 1px solid #ddd; padding: 8px; }
+        
+        .upload-area { border: 2px dashed #ccc; padding: 20px; text-align: center; color: #666; margin-bottom: 10px; }
+        .upload-area.dragover { border-color: #007acc; background: #f0f8ff; }
+        
+        .file-list { max-height: 120px; overflow-y: auto; }
+        .file-item { padding: 4px 8px; cursor: pointer; border-radius: 3px; font-size: 12px; }
+        .file-item:hover { background: #e6e6e6; }
+        
+        .search-box input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; }
+        .search-results { max-height: 150px; overflow-y: auto; margin-top: 8px; }
+        .search-result { padding: 6px; cursor: pointer; border-radius: 3px; font-size: 12px; }
+        .search-result:hover { background: #e6e6e6; }
+        
+        .toggle-btn { background: none; border: none; cursor: pointer; padding: 4px 8px; }
+        
+        @media (max-width: 768px) {
+            .toolbar-right { gap: 4px; }
+            .nav-link { font-size: 12px; padding: 3px 6px; }
+            .toolbar-right .nav-link:not(.primary) { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()" id="toggleBtn">≡</button>
+                <span>Editing: untitled.md</span>
+            </div>
+            <div class="toolbar-right">
+                <a href="/admin" class="nav-link">Dashboard</a>
+                <a href="/admin/posts" class="nav-link">All Posts</a>
+                <a href="/admin/pages" class="nav-link">Pages</a>
+                <a href="/admin/files" class="nav-link">Files</a>
+                <a href="/preview/untitled" class="nav-link primary" target="_blank">Preview</a>
+            </div>
+        </div>
+        
+        <div class="editor-main">
+            <div class="editor">
+                <textarea placeholder="# Your markdown content here...
+
+## Features
+- Write in markdown
+- Upload files via sidebar
+- Search and link pages
+- Live preview available"></textarea>
+            </div>
+            
+            <div class="sidebar" id="sidebar">
+                <div class="section">
+                    <h3>Front Matter</h3>
+                    <textarea placeholder="title: My Post
+tags: [blog, markdown]
+date: 2024-01-01
+public: true"></textarea>
+                </div>
+                
+                <div class="section">
+                    <h3>File Upload</h3>
+                    <div class="upload-area" id="uploadArea">
+                        Drop files here or click to upload
+                    </div>
+                    <div class="file-list">
+                        <div class="file-item">📷 image1.jpg</div>
+                        <div class="file-item">📄 document.pdf</div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>Page Search</h3>
+                    <div class="search-box">
+                        <input type="text" placeholder="Search pages..." id="searchInput">
+                    </div>
+                    <div class="search-results" id="searchResults">
+                        <div class="search-result">📝 Getting Started</div>
+                        <div class="search-result">📝 Features Overview</div>
+                        <div class="search-result">📝 Configuration</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const btn = document.getElementById('toggleBtn');
+            sidebar.classList.toggle('collapsed');
+            btn.textContent = sidebar.classList.contains('collapsed') ? '≡' : '✕';
+        }
+        
+        // File upload drag & drop
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            console.log('Files dropped:', e.dataTransfer.files);
+        });
+        
+        // Insert links at cursor
+        document.querySelectorAll('.file-item, .search-result').forEach(item => {
+            item.addEventListener('click', () => {
+                const textarea = document.querySelector('textarea');
+                const isImage = item.textContent.includes('📷');
+                const name = item.textContent.replace(/^[📷📄📝]\s*/, '');
+                const link = isImage ? `![${name}](${name})` : `[${name}](${name})`;
+                
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + link + textarea.value.substring(end);
+                textarea.focus();
+                textarea.setSelectionRange(start + link.length, start + link.length);
+            });
+        });
+        
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            // In real implementation, this would search actual pages
+            console.log('Searching for:', e.target.value);
+        });
+    </script>
+</body>
+</html>
