@@ -43,6 +43,9 @@ type ParserConfig struct {
 	EnableFrontmatter    bool
 	LazyLoadImages       bool
 	SmartypantsFractions bool
+
+	WikiLinkRenderer  func(string) string
+	ShortcodeRenderer func(string) string
 }
 
 // DefaultParserConfig returns a default parser configuration
@@ -54,6 +57,22 @@ func DefaultParserConfig() *ParserConfig {
 		EnableFrontmatter:    true,
 		LazyLoadImages:       true,
 		SmartypantsFractions: false,
+
+		WikiLinkRenderer: func(linkText string) string {
+			return fmt.Sprintf(`<a href="%s">%s</a>`, url.PathEscape(linkText), linkText)
+		},
+		ShortcodeRenderer: func(name string) string {
+			switch name {
+			case "toc":
+				return `<div class="toc"><!-- Table of Contents --></div>`
+			case "filelist":
+				return `<div class="filelist"><!-- File List --></div>`
+			case "backlinks":
+				return `<div class="backlinks"><!-- Backlinks --></div>`
+			default:
+				return fmt.Sprintf(`<!-- Unknown shortcode: %s -->`, name)
+			}
+		},
 	}
 }
 
@@ -61,12 +80,14 @@ func DefaultParserConfig() *ParserConfig {
 type ParsedContent struct {
 	Frontmatter *FrontmatterData
 	Body        []byte
-	HTML        template.HTML
 	Hashtags    []string
 	PlainText   string
 	Images      []ImageData
 	WikiLinks   []string
 	Shortcodes  []ShortcodeData
+
+	mdparser *MarkdownParser
+	HTML     []byte
 }
 
 // ShortcodeData represents a parsed shortcode
@@ -75,23 +96,15 @@ type ShortcodeData struct {
 	Position int    `json:"position"`
 }
 
-var DefaultWikiLinkifyCallback = func(linkText []byte) ast.Node {
-	link := &ast.Link{
-		Destination: []byte(url.PathEscape(string(linkText))),
-	}
-	ast.AppendChild(link, &ast.Text{
-		Leaf: ast.Leaf{Literal: linkText},
-	})
-	return link
-}
-
 // MarkdownParser provides a clean interface for parsing markdown with frontmatter
 type MarkdownParser struct {
-	config     *ParserConfig
-	parser     *parser.Parser
-	renderer   *html.Renderer
+	config   *ParserConfig
+	parser   *parser.Parser
+	renderer *html.Renderer
+
 	hashtags   *[]string
 	shortcodes *[]ShortcodeData
+	wikilinks  *[]string
 }
 
 // NewMarkdownParser creates a new parser with the given configuration
@@ -120,18 +133,16 @@ func (mp *MarkdownParser) initializeParser() {
 
 	// Register inline parsers based on configuration
 	if mp.config.EnableWikiLinks {
-		mp.createWikiLinkParser(mp.parser)
+		prev := mp.parser.RegisterInline('[', nil)
+		wikiFunc, wikilinks := mp.wikiLinkParser(prev)
+		mp.wikilinks = wikilinks
+		mp.parser.RegisterInline('[', wikiFunc)
 	}
 
 	if mp.config.EnableHashtags {
 		hashtagFn, hashtags := mp.hashtagParser()
 		mp.hashtags = hashtags
 		mp.parser.RegisterInline('#', hashtagFn)
-	}
-
-	if mp.config.EnableWebfinger {
-		// TODO: Implement webfinger support
-		// mp.parser.RegisterInline('@', mp.webfingerParser)
 	}
 
 	// Initialize shortcode tracking
@@ -149,8 +160,7 @@ type wikiLinkParserConfigResult struct {
 }
 
 func (mp *MarkdownParser) createWikiLinkParser(parser *parser.Parser) {
-	prev := parser.RegisterInline('[', nil)
-	parser.RegisterInline('[', mp.wikiLinkParser(prev))
+
 }
 
 // initializeRenderer sets up the HTML renderer with appropriate flags
@@ -172,6 +182,7 @@ func (mp *MarkdownParser) initializeRenderer() {
 // Parse parses the complete markdown content including frontmatter
 func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 	result := &ParsedContent{}
+	result.mdparser = mp
 
 	// Extract frontmatter if enabled
 	bodyContent := content
@@ -184,9 +195,7 @@ func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 	}
 
 	result.Body = bodyContent
-
-	// Parse markdown to HTML
-	result.HTML = mp.RenderHTML(bodyContent)
+	result.HTML = markdown.ToHTML(bodyContent, mp.parser, mp.renderer)
 
 	// Extract hashtags if enabled
 	if mp.config.EnableHashtags && mp.hashtags != nil {
@@ -206,6 +215,13 @@ func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 		result.Shortcodes = *mp.shortcodes
 		// Reset shortcodes for next parse
 		*mp.shortcodes = (*mp.shortcodes)[:0]
+	}
+
+	// Extract wiki links - get from parser state after HTML parsing
+	if mp.wikilinks != nil {
+		result.WikiLinks = *mp.wikilinks
+		// Reset wiki links for next parse
+		*mp.wikilinks = (*mp.wikilinks)[:0]
 	}
 
 	return result, nil
@@ -257,12 +273,6 @@ func (mp *MarkdownParser) ExtractFrontmatter(content []byte) (*FrontmatterData, 
 
 	// No frontmatter found
 	return nil, content, nil
-}
-
-// RenderHTML converts markdown content to HTML
-func (mp *MarkdownParser) RenderHTML(content []byte) template.HTML {
-	htmlBytes := markdown.ToHTML(content, mp.parser, mp.renderer)
-	return template.HTML(htmlBytes)
 }
 
 // ExtractPlainText converts markdown to plain text, removing all formatting
@@ -325,13 +335,10 @@ func (mp *MarkdownParser) ExtractHeadings(content []byte) []HeadingData {
 	return ExtractHeadings(content)
 }
 
-// wikiLinkParser creates a parser for [[wiki links]]
-func (mp *MarkdownParser) wikiLinkParser(fallback func(*parser.Parser, []byte, int) (int, ast.Node)) func(*parser.Parser, []byte, int) (int, ast.Node) {
-	return mp.wikiLinkCallbackParser(DefaultWikiLinkifyCallback, fallback)
-}
+func (mp *MarkdownParser) wikiLinkParser(fallback func(*parser.Parser, []byte, int) (int, ast.Node)) (func(*parser.Parser, []byte, int) (int, ast.Node), *[]string) {
+	wikilinks := make([]string, 0)
 
-func (mp *MarkdownParser) wikiLinkCallbackParser(cb func([]byte) ast.Node, fallback func(*parser.Parser, []byte, int) (int, ast.Node)) func(*parser.Parser, []byte, int) (int, ast.Node) {
-	return func(p *parser.Parser, original []byte, offset int) (int, ast.Node) {
+	parseFunc := func(p *parser.Parser, original []byte, offset int) (int, ast.Node) {
 		data := original[offset:]
 		n := len(data)
 
@@ -350,10 +357,23 @@ func (mp *MarkdownParser) wikiLinkCallbackParser(cb func([]byte) ast.Node, fallb
 			return fallback(p, original, offset)
 		}
 
-		linkText := data[2:i]
+		linkText := string(data[2:i])
 
-		return i + 2, cb(linkText)
+		// Record the wiki link
+		if mp.wikilinks != nil && linkText != "" {
+			*mp.wikilinks = append(*mp.wikilinks, linkText)
+		}
+
+		renderedLink := mp.config.WikiLinkRenderer(linkText)
+		link := &ast.HTMLSpan{
+			Leaf: ast.Leaf{Literal: []byte(renderedLink)},
+		}
+
+		// Return placeholder span instead of rendered link
+		return i + 2, link
 	}
+
+	return parseFunc, &wikilinks
 }
 
 // hashtagParser creates a parser for #hashtags
@@ -449,6 +469,36 @@ func (mp *MarkdownParser) shortcodeParser() func(*parser.Parser, []byte, int) (i
 	}
 }
 
+//// Render applies replacements to HTML content using the provided RenderConfig
+//func (result *ParsedContent) Render(config *RenderConfig) template.HTML {
+//	if config == nil {
+//		config = DefaultRenderConfig()
+//	}
+//
+//	htmlBytes := markdown.ToHTML(result.Body, result.mdparser.parser, result.mdparser.renderer)
+//	htmlString := string(htmlBytes)
+//
+//	// Replace wiki link placeholders
+//	if config.WikiLinkRenderer != nil {
+//		for _, linkText := range result.WikiLinks {
+//			placeholder := "[[" + linkText + "]]"
+//			replacement := config.WikiLinkRenderer(linkText)
+//			htmlString = strings.ReplaceAll(htmlString, placeholder, replacement)
+//		}
+//	}
+//
+//	// Replace shortcode placeholders
+//	if config.ShortcodeRenderer != nil {
+//		for _, shortcode := range result.Shortcodes {
+//			placeholder := "{{" + shortcode.Name + "}}"
+//			replacement := config.ShortcodeRenderer(shortcode.Name)
+//			htmlString = strings.ReplaceAll(htmlString, placeholder, replacement)
+//		}
+//	}
+//
+//	return template.HTML(htmlString)
+//}
+
 // nodeToString extracts text content from an AST node
 func (mp *MarkdownParser) nodeToString(node ast.Node) string {
 	var buffer bytes.Buffer
@@ -461,22 +511,6 @@ func (mp *MarkdownParser) nodeToString(node ast.Node) string {
 		return ast.GoToNext
 	})
 	return buffer.String()
-}
-
-// Legacy functions for backwards compatibility
-
-// renderHtml updates a Page with parsed HTML content
-func (p *Page) renderHtml() {
-	parser := NewMarkdownParser(DefaultParserConfig())
-	content, err := parser.Parse(p.Body)
-	if err != nil {
-		// For backwards compatibility, continue with basic parsing on error
-		p.HTML = template.HTML(markdown.ToHTML(p.Body, parser.parser, parser.renderer))
-		return
-	}
-
-	p.HTML = content.HTML
-	p.Hashtags = content.Hashtags
 }
 
 // plainText renders the Page.Body to plain text
@@ -747,4 +781,18 @@ func (fm *FrontmatterData) HasKey(key string) bool {
 	}
 	_, exists := fm.Data[key]
 	return exists
+}
+
+// renderHtml updates a Page with parsed HTML content
+func (p *Page) renderHtml() {
+	mdParser := NewMarkdownParser(DefaultParserConfig())
+	content, err := mdParser.Parse(p.Body)
+	if err != nil || content == nil {
+		// For backwards compatibility, continue with basic parsing on error
+		p.HTML = "error rendering"
+		return
+	}
+
+	p.HTML = template.HTML(content.HTML)
+	p.Hashtags = content.Hashtags
 }
