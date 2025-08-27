@@ -2,6 +2,7 @@ package sync
 
 import (
 	"archive/zip"
+	"blogsync2/pkg/db"
 	"fmt"
 	"io"
 	"log"
@@ -17,16 +18,20 @@ import (
 )
 
 type Manager struct {
-	config     *config.Config
-	client     *dropbox.Client
-	lastCursor string
-	db         *gorm.DB
+	config *config.Config
+	client *dropbox.Client
+	db     *gorm.DB
 }
 
-type Event int
+type EventType int
+
+type Event struct {
+	Type EventType
+	Data any
+}
 
 const (
-	FilesChanged Event = iota
+	FilesChanged EventType = iota
 	FilesChangedWithCursor
 	ForceSync
 )
@@ -39,9 +44,9 @@ func NewManager(cfg *config.Config, client *dropbox.Client, database *gorm.DB) *
 	}
 
 	// Try to load cursor from file
-	if cursor, err := manager.loadCursor(); err == nil {
-		manager.lastCursor = cursor
-	}
+	//if cursor, err := manager.loadCursor(); err == nil {
+	//	manager.lastCursor = cursor
+	//}
 
 	return manager
 }
@@ -50,10 +55,10 @@ func (m *Manager) Start(eventChan <-chan Event) {
 	log.Println("Starting sync manager loop")
 
 	for event := range eventChan {
-		switch event {
+		switch event.Type {
 		case FilesChanged:
-			log.Println("Files changed event received, starting incremental sync")
-			if err := m.incrementalSync(); err != nil {
+			log.Println("File changed event received, starting incremental sync")
+			if err := m.incrementalSync(event.Data); err != nil {
 				log.Printf("Incremental sync failed: %v", err)
 			}
 		case ForceSync:
@@ -61,6 +66,8 @@ func (m *Manager) Start(eventChan <-chan Event) {
 			if err := m.syncFiles(); err != nil {
 				log.Printf("Force sync failed: %v", err)
 			}
+		default:
+			panic("unhandled default case")
 		}
 	}
 }
@@ -85,6 +92,53 @@ func (m *Manager) syncFiles() error {
 
 	// Download/update files from Dropbox
 	for _, file := range files {
+		localPathRef := strings.TrimPrefix(file.Path, "/")
+
+		needsDownload := true
+
+		// check if it exists in db
+		f := db.File{
+			UserID:    1,
+			LocalPath: localPathRef,
+		}
+
+		tx := m.db.Where("user_id = ? AND local_path = ?", f.UserID, f.LocalPath).First(&f)
+		if err := tx.Error; err != nil && err != gorm.ErrRecordNotFound {
+			log.Printf("Failed to query file %s from database: %v", localPathRef, err)
+		} else {
+			if tx.RowsAffected > 0 {
+				dbHash := f.ContentHash
+				// if db hash is not up to date, compute it
+				if dbHash == "" {
+					localPath := filepath.Join(m.config.Sync.LocalBasePath, localPathRef)
+					// check if file exists
+					if _, err := os.Stat(localPath); err == nil {
+						computedHash, err := HashFile(localPath)
+						if err != nil {
+							log.Printf("Failed to compute hash for %s: %v", localPathRef, err)
+						} else {
+							dbHash = computedHash
+							f.ContentHash = dbHash
+							if err := m.db.Save(&f).Error; err != nil {
+								log.Printf("Failed to update hash for %s in database: %v", localPathRef, err)
+							} else {
+								log.Printf("Updated hash for %s in database", localPathRef)
+							}
+						}
+					}
+				}
+
+				if dbHash != "" && file.ContentHash != "" && dbHash == file.ContentHash {
+					needsDownload = false
+					log.Printf("File %s already up to date (hash match from DB)", file.Path)
+				}
+			}
+		}
+
+		if !needsDownload {
+			continue
+		}
+
 		relativePath := strings.TrimPrefix(file.Path, m.config.Sync.DropboxFolder)
 		relativePath = strings.TrimPrefix(relativePath, "/")
 
@@ -97,6 +151,17 @@ func (m *Manager) syncFiles() error {
 			log.Printf("Failed to sync file %s: %v", file.Path, err)
 			continue
 		}
+	}
+
+	if err := m.saveCursor(newCursor); err != nil {
+		log.Printf("Failed to save cursor: %v", err)
+	} else {
+		//m.lastCursor = newCursor
+		err := m.saveCursor(newCursor)
+		if err != nil {
+			log.Printf("Failed to save cursor: %v", err)
+		}
+		log.Printf("Saved cursor: %s", newCursor)
 	}
 
 	// Remove local files that no longer exist in Dropbox
@@ -116,29 +181,37 @@ func (m *Manager) syncFiles() error {
 		return err
 	}
 
-	if err := m.saveCursor(newCursor); err != nil {
-		log.Printf("Failed to save cursor: %v", err)
-	} else {
-		m.lastCursor = newCursor
-		log.Printf("Saved cursor: %s", newCursor)
-	}
-
 	log.Println("Full sync process completed successfully")
 	return nil
 }
 
-func (m *Manager) incrementalSync() error {
-	if m.lastCursor == "" {
+func (m *Manager) incrementalSync(data any) error {
+	//dropbox.WebhookNotification{}
+	notificationData, ok := data.(*dropbox.WebhookNotification)
+	if !ok {
+		return fmt.Errorf("invalid data for incremental sync")
+	}
+	_ = notificationData
+
+	//if m.lastCursor == "" {
+	//	log.Println("No cursor available, falling back to full sync")
+	//	return m.syncFiles()
+	//}
+
+	cursor, err := m.loadCursor()
+	if err != nil {
 		log.Println("No cursor available, falling back to full sync")
 		return m.syncFiles()
 	}
 
 	log.Println("Starting incremental sync from cursor")
 
-	changedFiles, err := m.client.GetChangesFromCursor(m.lastCursor)
+	changedFiles, latestCursor, err := m.client.GetChangesFromCursor(cursor)
 	if err != nil {
 		return fmt.Errorf("failed to get changes from cursor: %w", err)
 	}
+
+	m.saveCursor(latestCursor)
 
 	if len(changedFiles) == 0 {
 		log.Println("No files changed since last sync")
@@ -211,6 +284,14 @@ func (m *Manager) syncSingleFile(fileInfo *dropbox.FileInfo, localPath string) e
 	if err := m.client.DownloadFile(fileInfo.Path, localPath); err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
+
+	//f := db.File{
+	//	UserID:      0,
+	//	RemotePath:  fileInfo.Path,
+	//	LocalPath:   localPath,
+	//	Size:        fileInfo.Size,
+	//	ContentHash: fileInfo.ContentHash,
+	//}
 
 	log.Printf("Downloaded: %s", fileInfo.Path)
 	return nil
@@ -435,15 +516,38 @@ func (m *Manager) cursorFilePath() string {
 }
 
 func (m *Manager) loadCursor() (string, error) {
-	data, err := os.ReadFile(m.cursorFilePath())
-	if err != nil {
+	//data, err := os.ReadFile(m.cursorFilePath())
+	//if err != nil {
+	//	return "", err
+	//}
+	//return string(data), nil
+	var cursor db.SyncCursor
+	if err := m.db.First(&cursor, "user_id = ?", 1).Error; err != nil {
 		return "", err
 	}
-	return string(data), nil
+	return cursor.Cursor, nil
 }
 
 func (m *Manager) saveCursor(cursor string) error {
-	return os.WriteFile(m.cursorFilePath(), []byte(cursor), 0644)
+	//return os.WriteFile(m.cursorFilePath(), []byte(cursor), 0644)
+	var syncCursor db.SyncCursor
+	if err := m.db.First(&syncCursor, "user_id = ?", 1).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			syncCursor = db.SyncCursor{
+				UserID: 1,
+				Cursor: cursor,
+			}
+			if err := m.db.Create(&syncCursor).Error; err != nil {
+				return fmt.Errorf("failed to create cursor in database: %w", err)
+			}
+			return nil
+		}
+	}
+	syncCursor.Cursor = cursor
+	if err := m.db.Save(&syncCursor).Error; err != nil {
+		return fmt.Errorf("failed to update cursor in database: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) ExtractZip(zipPath, extractTo string) (int, error) {
@@ -493,7 +597,43 @@ func (m *Manager) ExtractZip(zipPath, extractTo string) (int, error) {
 			return extractedCount, err
 		}
 
+		// persist to db
+		f := db.File{
+			UserID:    1,
+			LocalPath: file.Name,
+			Size:      uint64(file.FileInfo().Size()),
+		}
+
 		extractedCount++
+
+		// get record with user id and localpath
+		existingFile := &db.File{}
+		tx := m.db.Where("user_id = ? AND local_path = ?", f.UserID, f.LocalPath).First(existingFile)
+		if err := tx.Error; err != nil {
+			if err != gorm.ErrRecordNotFound {
+				log.Printf("Failed to query file %s from database: %v", path, err)
+			} else {
+				// create
+				log.Printf("File %s not found in database, will create new record", path)
+				if err := m.db.Create(&f).Error; err != nil {
+					log.Printf("Failed to create file %s in database: %v", path, err)
+				} else {
+					log.Printf("Created file %s in database", path)
+				}
+				continue
+			}
+		}
+		if tx.RowsAffected > 0 {
+			log.Printf("File %s already exists in database, will update size if changed", path)
+			existingFile.Size = f.Size
+			if err := m.db.Save(existingFile).Error; err != nil {
+				log.Printf("Failed to update file %s in database: %v", path, err)
+			} else {
+				log.Printf("Updated file %s in database", path)
+			}
+			continue
+		}
+
 	}
 
 	return extractedCount, nil

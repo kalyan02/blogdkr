@@ -1,2 +1,7 @@
 blogsync2
 .idea
+./sync
+./output
+/blogsync2/sync
+sqlite.db
+database.db

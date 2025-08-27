@@ -17,20 +17,20 @@ type Client struct {
 }
 
 type FileInfo struct {
-	Name         string    `json:"name"`
-	Path         string    `json:"path_display"`
-	Size         uint64    `json:"size"`
-	Modified     time.Time `json:"server_modified"`
-	ID           string    `json:"id,omitempty"`
-	ContentHash  string    `json:"content_hash,omitempty"`
-	IsDownloadable bool    `json:"is_downloadable,omitempty"`
+	Name           string    `json:"name"`
+	Path           string    `json:"path_display"`
+	Size           uint64    `json:"size"`
+	Modified       time.Time `json:"server_modified"`
+	ID             string    `json:"id,omitempty"`
+	ContentHash    string    `json:"content_hash,omitempty"`
+	IsDownloadable bool      `json:"is_downloadable,omitempty"`
 }
 
 type ListFolderRequest struct {
-	Path                           string `json:"path"`
-	Recursive                      bool   `json:"recursive"`
-	IncludeMediaInfo              bool   `json:"include_media_info"`
-	IncludeDeleted                bool   `json:"include_deleted"`
+	Path                            string `json:"path"`
+	Recursive                       bool   `json:"recursive"`
+	IncludeMediaInfo                bool   `json:"include_media_info"`
+	IncludeDeleted                  bool   `json:"include_deleted"`
 	IncludeHasExplicitSharedMembers bool   `json:"include_has_explicit_shared_members"`
 }
 
@@ -93,10 +93,10 @@ func (c *Client) ListFolder(folderPath string, recursive bool) ([]FileInfo, stri
 	}
 
 	request := ListFolderRequest{
-		Path:                           path,
-		Recursive:                      recursive,
-		IncludeMediaInfo:              false,
-		IncludeDeleted:                false,
+		Path:                            path,
+		Recursive:                       recursive,
+		IncludeMediaInfo:                false,
+		IncludeDeleted:                  false,
 		IncludeHasExplicitSharedMembers: false,
 	}
 
@@ -135,12 +135,12 @@ func (c *Client) ListFolder(folderPath string, recursive bool) ([]FileInfo, stri
 	for _, entry := range listResp.Entries {
 		if entry.Tag == "file" {
 			allFiles = append(allFiles, FileInfo{
-				Name:         entry.Name,
-				Path:         entry.PathDisplay,
-				Size:         entry.Size,
-				Modified:     entry.ServerModified,
-				ID:           entry.ID,
-				ContentHash:  entry.ContentHash,
+				Name:           entry.Name,
+				Path:           entry.PathDisplay,
+				Size:           entry.Size,
+				Modified:       entry.ServerModified,
+				ID:             entry.ID,
+				ContentHash:    entry.ContentHash,
 				IsDownloadable: entry.IsDownloadable,
 			})
 		}
@@ -157,12 +157,12 @@ func (c *Client) ListFolder(folderPath string, recursive bool) ([]FileInfo, stri
 		for _, entry := range listResp.Entries {
 			if entry.Tag == "file" {
 				allFiles = append(allFiles, FileInfo{
-					Name:         entry.Name,
-					Path:         entry.PathDisplay,
-					Size:         entry.Size,
-					Modified:     entry.ServerModified,
-					ID:           entry.ID,
-					ContentHash:  entry.ContentHash,
+					Name:           entry.Name,
+					Path:           entry.PathDisplay,
+					Size:           entry.Size,
+					Modified:       entry.ServerModified,
+					ID:             entry.ID,
+					ContentHash:    entry.ContentHash,
 					IsDownloadable: entry.IsDownloadable,
 				})
 			}
@@ -207,17 +207,21 @@ func (c *Client) listFolderContinue(cursor string) (ListFolderResponse, error) {
 	}
 
 	var listResp ListFolderResponse
-	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ListFolderResponse{}, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if err := json.Unmarshal(body, &listResp); err != nil {
 		return ListFolderResponse{}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	return listResp, nil
 }
 
-func (c *Client) GetChangesFromCursor(cursor string) ([]FileInfo, error) {
+func (c *Client) GetChangesFromCursor(cursor string) ([]FileInfo, string, error) {
 	continueResp, err := c.listFolderContinue(cursor)
 	if err != nil {
-		return nil, err
+		return nil, continueResp.Cursor, err
 	}
 
 	var allFiles []FileInfo
@@ -227,12 +231,12 @@ func (c *Client) GetChangesFromCursor(cursor string) ([]FileInfo, error) {
 		for _, entry := range currentResp.Entries {
 			if entry.Tag == "file" {
 				allFiles = append(allFiles, FileInfo{
-					Name:         entry.Name,
-					Path:         entry.PathDisplay,
-					Size:         entry.Size,
-					Modified:     entry.ServerModified,
-					ID:           entry.ID,
-					ContentHash:  entry.ContentHash,
+					Name:           entry.Name,
+					Path:           entry.PathDisplay,
+					Size:           entry.Size,
+					Modified:       entry.ServerModified,
+					ID:             entry.ID,
+					ContentHash:    entry.ContentHash,
 					IsDownloadable: entry.IsDownloadable,
 				})
 			}
@@ -244,11 +248,11 @@ func (c *Client) GetChangesFromCursor(cursor string) ([]FileInfo, error) {
 
 		currentResp, err = c.listFolderContinue(currentResp.Cursor)
 		if err != nil {
-			return nil, err
+			return nil, continueResp.Cursor, err
 		}
 	}
 
-	return allFiles, nil
+	return allFiles, continueResp.Cursor, nil
 }
 
 func (c *Client) DownloadFile(dropboxPath, localPath string) error {

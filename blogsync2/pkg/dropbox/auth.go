@@ -14,7 +14,7 @@ import (
 
 type Auth struct {
 	config  config.DropboxConfig
-	storage *token.SecureStorage
+	storage token.TokenStorage
 }
 
 type TokenResponse struct {
@@ -25,7 +25,7 @@ type TokenResponse struct {
 	Scope        string `json:"scope,omitempty"`
 }
 
-func NewAuth(config config.DropboxConfig, storage *token.SecureStorage) *Auth {
+func NewAuth(config config.DropboxConfig, storage token.TokenStorage) *Auth {
 	return &Auth{
 		config:  config,
 		storage: storage,
@@ -39,6 +39,7 @@ func (a *Auth) GetAuthorizationURL(state string) (string, error) {
 	params.Add("client_id", a.config.AppKey)
 	params.Add("redirect_uri", a.config.RedirectURI)
 	params.Add("state", state)
+	params.Add("token_access_type", "offline")
 	params.Add("force_reapprove", "false")
 	params.Add("disable_signup", "false")
 
@@ -46,6 +47,10 @@ func (a *Auth) GetAuthorizationURL(state string) (string, error) {
 }
 
 func (a *Auth) ExchangeCodeForToken(code string) error {
+	if storageWithUser, ok := a.storage.(token.TokenStorageWithUserCreation); ok {
+		return a.ExchangeCodeForTokenWithUserCreation(code, storageWithUser)
+	}
+
 	data := url.Values{}
 	data.Set("code", code)
 	data.Set("grant_type", "authorization_code")
@@ -131,4 +136,72 @@ func (a *Auth) refreshToken(refreshToken string) error {
 	}
 
 	return a.storage.SaveToken(tokenResp.AccessToken, newRefreshToken, expiresAt)
+}
+
+func (a *Auth) ExchangeCodeForTokenWithUserCreation(code string, storageWithUser token.TokenStorageWithUserCreation) error {
+	data := url.Values{}
+	data.Set("code", code)
+	data.Set("grant_type", "authorization_code")
+	data.Set("client_id", a.config.AppKey)
+	data.Set("client_secret", a.config.AppSecret)
+	data.Set("redirect_uri", a.config.RedirectURI)
+
+	resp, err := http.PostForm("https://api.dropboxapi.com/oauth2/token", data)
+	if err != nil {
+		return fmt.Errorf("failed to exchange code for token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("token exchange failed: %s", string(body))
+	}
+
+	var tokenResp TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return fmt.Errorf("failed to decode token response: %w", err)
+	}
+
+	expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+
+	userInfoResp, err := a.getUserInfoWithToken(tokenResp.AccessToken)
+	if err != nil {
+		return fmt.Errorf("failed to get user info: %w", err)
+	}
+
+	return storageWithUser.SaveTokenWithUser(
+		tokenResp.AccessToken,
+		tokenResp.RefreshToken,
+		expiresAt,
+		userInfoResp.AccountID,
+		userInfoResp.Name.DisplayName,
+		userInfoResp.Email,
+	)
+}
+
+func (a *Auth) getUserInfoWithToken(accessToken string) (*UserInfo, error) {
+	req, err := http.NewRequest("POST", "https://api.dropboxapi.com/2/users/get_current_account", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current account: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("dropbox API error: %s", string(body))
+	}
+
+	var userInfo UserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		return nil, fmt.Errorf("failed to decode user info: %w", err)
+	}
+
+	return &userInfo, nil
 }

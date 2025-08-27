@@ -59,6 +59,7 @@ func startServer(configFile, password string) error {
 	}
 
 	pwd := getPassword(password)
+	_ = pwd
 
 	// Connect to database
 	database, err := db.DBConnect(cfg)
@@ -66,10 +67,11 @@ func startServer(configFile, password string) error {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	tokenStorage, err := token.NewSecureStorage(token.GetDefaultTokenPath(), pwd)
-	if err != nil {
-		return fmt.Errorf("failed to create token storage: %w", err)
-	}
+	//tokenStorage, err := token.NewSecureStorage(token.GetDefaultTokenPath(), pwd)
+	//if err != nil {
+	//	return fmt.Errorf("failed to create token storage: %w", err)
+	//}
+	tokenStorage := token.NewDBStorageWithUserCreation(database)
 
 	// Database is ready for use
 	_ = database

@@ -9,7 +9,7 @@ services:
     container_name: blogsync-php
     volumes:
       - ./public_html:/var/www/html
-      - ./blogsync/sync:/var/www/sync:ro
+      - ./blogsync2/sync:/var/www/sync:ro
     restart: unless-stopped
     network_mode: host
     healthcheck:
@@ -29,7 +29,7 @@ services:
       - ./caddy/config:/config
       - ./caddy/logs:/var/log/caddy
       - ./public_html:/var/www/html
-      - ./blogsync/sync:/var/www/sync:ro
+      - ./blogsync2/sync:/var/www/sync:ro
     restart: unless-stopped
     network_mode: host
 

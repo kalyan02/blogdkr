@@ -13,6 +13,9 @@ webhook_path = "/webhook"
 local_base_path = "./sync"
 dropbox_folder = "/blog"
 
+[database]
+path = "./sqlite.db"
+
 [build]
 command = "zola build"
 working_directory = "./sync"

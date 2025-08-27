@@ -16,6 +16,18 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
+type TokenStorage interface {
+	SaveToken(accessToken, refreshToken string, expiresAt time.Time) error
+	LoadToken() (*TokenData, error)
+	HasValidToken() bool
+}
+
+type TokenStorageWithUserCreation interface {
+	SaveTokenWithUser(accessToken, refreshToken string, expiresAt time.Time, accountID, displayName, email string) error
+	LoadToken() (*TokenData, error)
+	HasValidToken() bool
+}
+
 type SecureStorage struct {
 	filePath string
 	password string

@@ -26,6 +26,10 @@ func DBConnect(cfg *config.Config) (*gorm.DB, error) {
 		Logger: logger.Default.LogMode(logger.Silent), // Reduce log noise
 	}
 
+	if dbPath == "" {
+		return nil, fmt.Errorf("database path is empty")
+	}
+
 	db, err := gorm.Open(sqlite.Open(dbPath), gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)

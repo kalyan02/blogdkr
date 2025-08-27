@@ -25,19 +25,6 @@ type Server struct {
 	client      *dropbox.Client
 }
 
-type WebhookVerification struct {
-	Challenge string `form:"challenge"`
-}
-
-type WebhookNotification struct {
-	ListFolder *struct {
-		Accounts []string `json:"accounts"`
-	} `json:"list_folder,omitempty"`
-	Delta *struct {
-		Users []int `json:"users"`
-	} `json:"delta,omitempty"`
-}
-
 func New(cfg *config.Config, syncManager *sync.Manager, auth *dropbox.Auth) *Server {
 	return &Server{
 		config:      cfg,
@@ -155,7 +142,7 @@ func (s *Server) indexHandler(c *gin.Context) {
 }
 
 func (s *Server) webhookVerificationHandler(c *gin.Context) {
-	var verification WebhookVerification
+	var verification dropbox.WebhookVerification
 	if err := c.ShouldBindQuery(&verification); err != nil {
 		log.Printf("Webhook verification request missing challenge parameter")
 		c.Status(http.StatusBadRequest)
@@ -189,8 +176,8 @@ func (s *Server) webhookNotificationHandler(syncChan chan<- sync.Event) gin.Hand
 		log.Printf("Raw body: %s", string(body))
 
 		// Try to parse as JSON if not empty
+		var payload dropbox.WebhookNotification
 		if len(body) > 0 {
-			var payload WebhookNotification
 			if err := json.Unmarshal(body, &payload); err != nil {
 				log.Printf("Failed to parse JSON payload: %v", err)
 			} else {
@@ -202,7 +189,7 @@ func (s *Server) webhookNotificationHandler(syncChan chan<- sync.Event) gin.Hand
 
 		// Send sync event
 		select {
-		case syncChan <- sync.FilesChanged:
+		case syncChan <- sync.Event{Type: sync.FilesChanged, Data: &payload}:
 			log.Println("Sync event sent successfully")
 			c.String(http.StatusOK, "OK")
 		default:
@@ -286,7 +273,7 @@ func (s *Server) manualSyncHandler(syncChan chan<- sync.Event) gin.HandlerFunc {
 		log.Println("Manual sync requested")
 
 		select {
-		case syncChan <- sync.ForceSync:
+		case syncChan <- sync.Event{Type: sync.ForceSync}:
 			respondJSON(c, http.StatusOK, gin.H{
 				"status":    "sync_triggered",
 				"message":   "Sync process has been triggered",
