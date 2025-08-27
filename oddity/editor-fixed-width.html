@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oddity Editor - Fixed Width</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'JetBrains Mono', monospace; 
+            background: white;
+            min-height: 100vh;
+        }
+        
+        .page-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .toolbar { 
+            background: transparent; 
+            padding: 20px 0; 
+            flex-shrink: 0; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+        }
+        
+        .toolbar-content {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .toolbar-left { display: flex; align-items: center; gap: 16px; }
+        .toolbar-right { display: flex; align-items: center; gap: 12px; }
+        .nav-link { 
+            color: #666; 
+            text-decoration: none; 
+            font-size: 13px; 
+            padding: 6px 12px; 
+            border-radius: 4px; 
+            transition: all 0.2s ease;
+        }
+        .nav-link:hover { background: #e6e6e6; color: #333; }
+        .nav-link.primary { background: #007acc; color: white; }
+        .nav-link.primary:hover { background: #005a9e; }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .editor-area {
+            width: 800px;
+            padding: 24px 32px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .editor-area textarea { 
+            width: 100%; 
+            height: 100%;
+            min-height: 500px;
+            border: none;
+            padding: 0;
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 14px; 
+            line-height: 1.6;
+            resize: vertical;
+            outline: none;
+            background: transparent;
+        }
+        
+        .editor-area textarea:focus {
+            border-color: #007acc;
+            box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+        }
+        
+        .sidebar { 
+            width: 260px;
+            background: transparent;
+            padding: 12px 12px 12px 20px;
+            flex-shrink: 0;
+            overflow-y: auto;
+            position: sticky;
+            top: 0;
+            height: fit-content;
+            max-height: calc(100vh - 60px);
+        }
+        
+        .section { 
+            margin-bottom: 16px; 
+        }
+        
+        .section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .section h3 { 
+            font-size: 11px; 
+            text-transform: uppercase; 
+            color: #666; 
+            margin-bottom: 6px; 
+            font-weight: 600;
+        }
+        
+        .section textarea { 
+            width: 100%; 
+            height: 100px; 
+            font-size: 11px; 
+            border: 1px solid #e8e8e8; 
+            padding: 6px; 
+            font-family: 'JetBrains Mono', monospace;
+            resize: vertical;
+            outline: none;
+            background: #fafafa;
+        }
+        
+        .section textarea:focus {
+            border-color: #007acc;
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.1);
+        }
+        
+        .upload-area { 
+            border: 1px dashed #d8d8d8; 
+            padding: 12px; 
+            text-align: center; 
+            color: #666; 
+            margin-bottom: 8px; 
+            cursor: pointer;
+            background: #f9f9f9;
+            font-size: 11px;
+        }
+        .upload-area:hover { 
+            border-color: #007acc; 
+            background: #f6f8fa; 
+        }
+        .upload-area.dragover { 
+            border-color: #007acc; 
+            background: #f0f8ff; 
+            color: #007acc;
+        }
+        
+        .file-list, .search-results { 
+            max-height: 200px; 
+            overflow-y: auto; 
+        }
+        
+        .file-item, .search-result { 
+            padding: 4px 6px; 
+            cursor: pointer; 
+            font-size: 11px; 
+            margin-bottom: 2px;
+        }
+        .file-item:hover, .search-result:hover { 
+            background: #f1f3f4; 
+        }
+        
+        .file-item[data-type="image"]:before { 
+            content: "[IMG] "; 
+            color: #007acc; 
+            font-weight: 600; 
+        }
+        .file-item[data-type="file"]:before { 
+            content: "[FILE] "; 
+            color: #6a737d; 
+            font-weight: 600; 
+        }
+        .search-result[data-type="page"]:before { 
+            content: "[PAGE] "; 
+            color: #28a745; 
+            font-weight: 600; 
+        }
+        
+        .search-box input { 
+            width: 100%; 
+            padding: 6px; 
+            border: 1px solid #e8e8e8; 
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            background: #fafafa;
+        }
+        
+        .search-box input:focus {
+            border-color: #007acc;
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.1);
+        }
+        
+        .search-results { 
+            margin-top: 12px; 
+        }
+        
+        .toggle-btn { 
+            background: none; 
+            border: none; 
+            cursor: pointer; 
+            padding: 8px; 
+            font-size: 16px;
+            color: #6a737d;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }
+        .toggle-btn:hover {
+            background: #f1f3f4;
+        }
+        
+        /* Desktop: hide mobile menu elements */
+        .menu-toggle {
+            display: none;
+        }
+        
+        .mobile-menu {
+            display: none;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 1024px) {
+            .page-container {
+                max-width: 100%;
+            }
+            
+            .main-content {
+                flex-direction: column;
+                justify-content: flex-start;
+            }
+            
+            .menu-toggle {
+                display: inline-block;
+            }
+            
+            .editor-area {
+                width: 100%;
+                max-width: none;
+                padding: 20px;
+            }
+            
+            .sidebar {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid #e1e5e9;
+                position: static;
+                max-height: none;
+                height: auto;
+            }
+            
+            .sidebar.collapsed {
+                display: none;
+            }
+            
+            .toolbar {
+                padding: 12px 0;
+            }
+            
+            .toolbar-content {
+                padding: 0 20px;
+                max-width: none;
+            }
+            
+            .toolbar-right {
+                position: relative;
+            }
+            
+            .menu-toggle {
+                display: inline-block;
+                background: none;
+                border: none;
+                font-size: 16px;
+                cursor: pointer;
+                padding: 4px 8px;
+            }
+            
+            .mobile-menu {
+                display: none;
+                position: absolute;
+                top: 100%;
+                right: 0;
+                background: white;
+                border: 1px solid #e8e8e8;
+                border-radius: 4px;
+                padding: 8px 0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                z-index: 1000;
+                min-width: 140px;
+                margin-top: 4px;
+            }
+            
+            .mobile-menu.show {
+                display: block !important;
+            }
+            
+            .mobile-menu .nav-link {
+                display: block !important;
+                padding: 8px 16px;
+                color: #666 !important;
+                text-decoration: none;
+                font-size: 12px;
+                border-radius: 0;
+            }
+            
+            .mobile-menu .nav-link:hover {
+                background: #f5f5f5 !important;
+                color: #333 !important;
+            }
+            
+            .toolbar-right .nav-link {
+                display: none;
+            }
+            
+            .toolbar-right .nav-link.primary {
+                display: inline-block;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .editor-area {
+                padding: 16px;
+            }
+            
+            .editor-area textarea {
+                padding: 16px;
+                font-size: 16px;
+            }
+            
+            .sidebar {
+                padding: 16px;
+            }
+            
+            .nav-link { 
+                font-size: 12px; 
+                padding: 4px 8px; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="toolbar">
+            <div class="toolbar-content">
+                <div class="toolbar-left">
+                    <button class="toggle-btn" onclick="toggleSidebar()" id="toggleBtn">≡</button>
+                    <span>Editing: untitled.md</span>
+                </div>
+                <div class="toolbar-right">
+                    <button class="menu-toggle" onclick="toggleMobileMenu()" id="menuToggle">⋯</button>
+                    <div class="mobile-menu" id="mobileMenu">
+                        <a href="/admin" class="nav-link">Dashboard</a>
+                        <a href="/admin/posts" class="nav-link">All Posts</a>
+                        <a href="/admin/pages" class="nav-link">Pages</a>
+                        <a href="/admin/files" class="nav-link">Files</a>
+                    </div>
+                    <a href="/admin" class="nav-link">Dashboard</a>
+                    <a href="/admin/posts" class="nav-link">All Posts</a>
+                    <a href="/admin/pages" class="nav-link">Pages</a>
+                    <a href="/admin/files" class="nav-link">Files</a>
+                    <a href="/preview/untitled" class="nav-link primary" target="_blank">Preview</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="editor-area">
+                <textarea placeholder="# Your markdown content here...
+
+## Features
+- Write in markdown
+- Upload files via sidebar
+- Search and link pages
+- Live preview available
+
+Start writing your content here. The editor is now centered with a fixed maximum width for better readability and focus."></textarea>
+            </div>
+            
+            <div class="sidebar" id="sidebar">
+                <div class="section">
+                    <h3>Front Matter</h3>
+                    <textarea placeholder="title: My Post
+tags: [blog, markdown]
+date: 2024-01-01
+public: true"></textarea>
+                </div>
+                
+                <div class="section">
+                    <h3>File Upload</h3>
+                    <div class="upload-area" id="uploadArea">
+                        Drop files here or click to upload
+                    </div>
+                    <div class="file-list">
+                        <div class="file-item" data-type="image">image1.jpg</div>
+                        <div class="file-item" data-type="file">document.pdf</div>
+                        <div class="file-item" data-type="image">screenshot.png</div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>Page Search</h3>
+                    <div class="search-box">
+                        <input type="text" placeholder="Search pages..." id="searchInput">
+                    </div>
+                    <div class="search-results" id="searchResults">
+                        <div class="search-result" data-type="page">Getting Started</div>
+                        <div class="search-result" data-type="page">Features Overview</div>
+                        <div class="search-result" data-type="page">Configuration</div>
+                        <div class="search-result" data-type="page">API Documentation</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const btn = document.getElementById('toggleBtn');
+            sidebar.classList.toggle('collapsed');
+            btn.textContent = sidebar.classList.contains('collapsed') ? '≡' : '✕';
+        }
+        
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            console.log('Toggle mobile menu called', menu);
+            menu.classList.toggle('show');
+            console.log('Menu classes:', menu.classList.toString());
+        }
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('mobileMenu');
+            const toggle = document.getElementById('menuToggle');
+            if (!menu.contains(e.target) && !toggle.contains(e.target)) {
+                menu.classList.remove('show');
+            }
+        });
+        
+        // File upload drag & drop
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            console.log('Files dropped:', e.dataTransfer.files);
+        });
+        
+        uploadArea.addEventListener('click', () => {
+            // Create file input for click-to-upload
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.click();
+        });
+        
+        // Insert links at cursor
+        document.querySelectorAll('.file-item, .search-result').forEach(item => {
+            item.addEventListener('click', () => {
+                const textarea = document.querySelector('.editor-area textarea');
+                const isImage = item.dataset.type === 'image';
+                const name = item.textContent.trim();
+                const link = isImage ? `![${name}](${name})` : `[${name}](${name})`;
+                
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + link + textarea.value.substring(end);
+                textarea.focus();
+                textarea.setSelectionRange(start + link.length, start + link.length);
+            });
+        });
+        
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            // In real implementation, this would search actual pages
+            console.log('Searching for:', e.target.value);
+        });
+        
+        // Auto-resize textarea
+        const textarea = document.querySelector('.editor-area textarea');
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.max(500, this.scrollHeight) + 'px';
+        });
+    </script>
+</body>
+</html>
