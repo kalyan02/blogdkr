@@ -99,6 +99,10 @@
             max-height: calc(100vh - 60px);
         }
         
+        .sidebar.collapsed {
+            display: none;
+        }
+        
         .section { 
             margin-bottom: 16px; 
         }
@@ -113,6 +117,27 @@
             color: #666; 
             margin-bottom: 6px; 
             font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .section h3:hover {
+            color: #333;
+        }
+        
+        .section-arrow {
+            font-size: 10px;
+            transition: transform 0.2s ease;
+        }
+        
+        .section.collapsed .section-arrow {
+            transform: rotate(-90deg);
+        }
+        
+        .section.collapsed .section-content {
+            display: none;
         }
         
         .section textarea { 
@@ -162,9 +187,102 @@
             cursor: pointer; 
             font-size: 11px; 
             margin-bottom: 2px;
+            position: relative;
         }
         .file-item:hover, .search-result:hover { 
             background: #f1f3f4; 
+        }
+        
+        .file-item {
+            display: block;
+            cursor: default;
+        }
+        
+        .file-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .file-name {
+            cursor: pointer;
+            flex: 1;
+        }
+        
+        .file-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .file-menu-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 4px;
+            font-size: 10px;
+            color: #666;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .file-item:hover .file-menu-btn {
+            opacity: 1;
+        }
+        
+        .file-menu {
+            display: none;
+            margin-top: 4px;
+            background: #f9f9f9;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            padding: 4px 0;
+            width: 100%;
+        }
+        
+        .file-menu.show {
+            display: block !important;
+        }
+        
+        .file-menu-item {
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .file-menu-item:last-child {
+            border-bottom: none;
+        }
+        
+        .file-menu-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .image-resize {
+            margin-top: 4px;
+            padding: 6px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        .resize-input {
+            width: 60px;
+            padding: 2px 4px;
+            border: 1px solid #ddd;
+            border-radius: 2px;
+            font-size: 10px;
+            margin-right: 4px;
+        }
+        
+        .image-resize button {
+            padding: 2px 6px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 2px;
+            font-size: 10px;
+            cursor: pointer;
         }
         
         .file-item[data-type="image"]:before { 
@@ -202,27 +320,135 @@
             margin-top: 12px; 
         }
         
-        .toggle-btn { 
-            background: none; 
-            border: none; 
-            cursor: pointer; 
-            padding: 8px; 
-            font-size: 16px;
-            color: #6a737d;
-            border-radius: 4px;
+        .top-controls {
+            position: fixed;
+            top: 8px;
+            right: 12px;
+            z-index: 1000;
+            display: flex;
+            gap: 4px;
+        }
+        
+        .compact-btn {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 4px 6px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #666;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+        
+        .compact-btn:hover {
+            background: rgba(255,255,255,1);
+            border-color: #bbb;
+            color: #333;
+        }
+        
+        .compact-btn.save-btn {
+            color: #28a745;
+        }
+        
+        .compact-btn.save-btn:hover {
+            background: #28a745;
+            color: white;
+        }
+        
+        .link-bar {
+            padding: 4px 0;
+        }
+        
+        .link-bar-content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 32px;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+        }
+        
+        .link-btn {
+            text-decoration: none;
+            color: #666;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+        
+        .link-btn:hover {
+            background: #e6e6e6;
+            color: #333;
+        }
+        
+        .link-btn.primary {
+            background: #007acc;
+            color: white;
+        }
+        
+        .link-btn.primary:hover {
+            background: #005a9e;
+        }
+        
+        .toolbar-center {
+            text-align: left;
+            flex: 1;
+        }
+        
+        
+        .nav-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .nav-item {
+            text-decoration: none;
+            color: #666;
+            font-size: 11px;
+            padding: 4px 6px;
+            border-radius: 3px;
             transition: background-color 0.2s ease;
         }
-        .toggle-btn:hover {
-            background: #f1f3f4;
+        
+        .nav-item:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .nav-item.primary {
+            background: #007acc;
+            color: white;
+        }
+        
+        .nav-item.primary:hover {
+            background: #005a9e;
         }
         
         /* Desktop: hide mobile menu elements */
-        .menu-toggle {
+        .sidebar-header .menu-toggle {
+            display: none;
+        }
+        
+        .sidebar-header .mobile-menu {
+            display: none;
+        }
+        
+        /* Distraction-free mode */
+        .distraction-free .sidebar,
+        .distraction-free .link-bar {
             display: none !important;
         }
         
-        .mobile-menu {
-            display: none !important;
+        .distraction-free .main-content {
+            padding-left: 0;
+            justify-content: center;
+        }
+        
+        .distraction-free .top-controls .save-btn {
+            display: none;
         }
         
         /* Wide screen optimization */
@@ -232,10 +458,21 @@
                 padding-left: calc(50vw - 400px);
             }
             
+            .link-bar-content {
+                margin: 0;
+                padding-left: calc(50vw - 400px + 32px);
+                max-width: none;
+                justify-content: flex-start;
+            }
+            
             .toolbar-content {
-                margin: 0 auto;
-                max-width: 800px;
-                padding: 0 32px;
+                margin: 0;
+                padding-left: calc(50vw - 400px + 32px);
+                max-width: none;
+            }
+            
+            .toolbar-center {
+                padding-left: 0;
             }
         }
         
@@ -273,6 +510,20 @@
                 display: none;
             }
             
+            .link-bar {
+                padding: 3px 0;
+            }
+            
+            .link-bar-content {
+                padding: 0 20px;
+                gap: 6px;
+            }
+            
+            .link-btn {
+                font-size: 10px;
+                padding: 2px 4px;
+            }
+            
             .toolbar {
                 padding: 12px 0;
             }
@@ -282,58 +533,51 @@
                 max-width: none;
             }
             
-            .toolbar-right {
-                position: relative;
-            }
-            
-            .menu-toggle {
+            .sidebar-controls .menu-toggle {
                 display: inline-block;
                 background: none;
                 border: none;
-                font-size: 16px;
+                font-size: 14px;
                 cursor: pointer;
-                padding: 4px 8px;
+                padding: 4px 6px;
             }
             
-            .mobile-menu {
+            .sidebar-controls .mobile-menu {
                 display: none;
-                position: absolute;
-                top: 100%;
-                right: 0;
-                background: white;
+                margin-top: 4px;
+                background: #f9f9f9;
                 border: 1px solid #e8e8e8;
                 border-radius: 4px;
-                padding: 8px 0;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                z-index: 1000;
-                min-width: 140px;
-                margin-top: 4px;
+                padding: 4px 0;
             }
             
-            .mobile-menu.show {
+            .sidebar-controls .mobile-menu.show {
                 display: block !important;
             }
             
-            .mobile-menu .nav-link {
+            .sidebar-controls .mobile-menu .nav-link {
                 display: block !important;
-                padding: 8px 16px;
+                padding: 4px 8px;
                 color: #666 !important;
                 text-decoration: none;
-                font-size: 12px;
-                border-radius: 0;
+                font-size: 10px;
             }
             
-            .mobile-menu .nav-link:hover {
-                background: #f5f5f5 !important;
+            .sidebar-controls .mobile-menu .nav-link:hover {
+                background: #f0f0f0 !important;
                 color: #333 !important;
             }
             
-            .toolbar-right .nav-link {
+            .nav-links {
                 display: none;
             }
             
-            .toolbar-right .nav-link.primary {
+            .sidebar-header .menu-toggle {
                 display: inline-block;
+            }
+            
+            .sidebar-header {
+                position: relative;
             }
         }
         
@@ -360,25 +604,16 @@
 </head>
 <body>
     <div class="page-container">
+        <div class="top-controls">
+            <button class="compact-btn" onclick="toggleSidebar()" id="toggleBtn" title="Toggle sidebar">≡</button>
+            <button class="compact-btn distraction-free-btn" onclick="toggleDistractionFree()" id="distractionBtn" title="Distraction-free mode">◐</button>
+            <button class="compact-btn save-btn" onclick="saveContent()" title="Save">💾</button>
+        </div>
+        
         <div class="toolbar">
             <div class="toolbar-content">
-                <div class="toolbar-left">
-                    <button class="toggle-btn" onclick="toggleSidebar()" id="toggleBtn">≡</button>
+                <div class="toolbar-center">
                     <span>Editing: untitled.md</span>
-                </div>
-                <div class="toolbar-right">
-                    <button class="menu-toggle" onclick="toggleMobileMenu()" id="menuToggle">⋯</button>
-                    <div class="mobile-menu" id="mobileMenu">
-                        <a href="/admin" class="nav-link">Dashboard</a>
-                        <a href="/admin/posts" class="nav-link">All Posts</a>
-                        <a href="/admin/pages" class="nav-link">Pages</a>
-                        <a href="/admin/files" class="nav-link">Files</a>
-                    </div>
-                    <a href="/admin" class="nav-link">Dashboard</a>
-                    <a href="/admin/posts" class="nav-link">All Posts</a>
-                    <a href="/admin/pages" class="nav-link">Pages</a>
-                    <a href="/admin/files" class="nav-link">Files</a>
-                    <a href="/preview/untitled" class="nav-link primary" target="_blank">Preview</a>
                 </div>
             </div>
         </div>
@@ -397,36 +632,107 @@ Start writing your content here. The editor is now centered with a fixed maximum
             </div>
             
             <div class="sidebar" id="sidebar">
+                
                 <div class="section">
-                    <h3>Front Matter</h3>
-                    <textarea placeholder="title: My Post
+                    <h3 onclick="toggleSection('navigation')">
+                        Navigation
+                        <span class="section-arrow">▼</span>
+                    </h3>
+                    <div class="section-content" id="navigation-content">
+                        <div class="nav-list">
+                            <a href="/admin" class="nav-item">📊 Dashboard</a>
+                            <a href="/admin/posts" class="nav-item">📝 All Posts</a>
+                            <a href="/admin/pages" class="nav-item">📄 Pages</a>
+                            <a href="/admin/files" class="nav-item">🗂️ Files</a>
+                            <a href="/preview/untitled" class="nav-item primary" target="_blank">👁️ Preview</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3 onclick="toggleSection('frontmatter')">
+                        Front Matter
+                        <span class="section-arrow">▼</span>
+                    </h3>
+                    <div class="section-content" id="frontmatter-content">
+                        <textarea placeholder="title: My Post
 tags: [blog, markdown]
 date: 2024-01-01
 public: true"></textarea>
-                </div>
-                
-                <div class="section">
-                    <h3>File Upload</h3>
-                    <div class="upload-area" id="uploadArea">
-                        Drop files here or click to upload
-                    </div>
-                    <div class="file-list">
-                        <div class="file-item" data-type="image">image1.jpg</div>
-                        <div class="file-item" data-type="file">document.pdf</div>
-                        <div class="file-item" data-type="image">screenshot.png</div>
                     </div>
                 </div>
                 
                 <div class="section">
-                    <h3>Page Search</h3>
-                    <div class="search-box">
-                        <input type="text" placeholder="Search pages..." id="searchInput">
+                    <h3 onclick="toggleSection('fileupload')">
+                        File Upload
+                        <span class="section-arrow">▼</span>
+                    </h3>
+                    <div class="section-content" id="fileupload-content">
+                        <div class="upload-area" id="uploadArea">
+                            Drop files here or click to upload
+                        </div>
+                        <div class="file-list">
+                            <div class="file-item" data-type="image">
+                                <div class="file-header">
+                                    <span class="file-name">image1.jpg</span>
+                                    <button class="file-menu-btn" onclick="toggleFileMenu('file1')">⋯</button>
+                                </div>
+                                <div class="file-menu" id="file1-menu">
+                                    <div class="file-menu-item" onclick="renameFile('file1')">Rename</div>
+                                    <div class="file-menu-item" onclick="deleteFile('file1')">Delete</div>
+                                    <div class="file-menu-item" onclick="showImageResize('file1')">Resize</div>
+                                </div>
+                                <div class="image-resize" id="file1-resize" style="display:none">
+                                    <input type="number" placeholder="Width" class="resize-input">
+                                    <input type="number" placeholder="Height" class="resize-input">
+                                    <button onclick="applyImageResize('file1')">Apply</button>
+                                </div>
+                            </div>
+                            <div class="file-item" data-type="file">
+                                <div class="file-header">
+                                    <span class="file-name">document.pdf</span>
+                                    <button class="file-menu-btn" onclick="toggleFileMenu('file2')">⋯</button>
+                                </div>
+                                <div class="file-menu" id="file2-menu">
+                                    <div class="file-menu-item" onclick="renameFile('file2')">Rename</div>
+                                    <div class="file-menu-item" onclick="deleteFile('file2')">Delete</div>
+                                </div>
+                            </div>
+                            <div class="file-item" data-type="image">
+                                <div class="file-header">
+                                    <span class="file-name">screenshot.png</span>
+                                    <button class="file-menu-btn" onclick="toggleFileMenu('file3')">⋯</button>
+                                </div>
+                                <div class="file-menu" id="file3-menu">
+                                    <div class="file-menu-item" onclick="renameFile('file3')">Rename</div>
+                                    <div class="file-menu-item" onclick="deleteFile('file3')">Delete</div>
+                                    <div class="file-menu-item" onclick="showImageResize('file3')">Resize</div>
+                                </div>
+                                <div class="image-resize" id="file3-resize" style="display:none">
+                                    <input type="number" placeholder="Width" class="resize-input">
+                                    <input type="number" placeholder="Height" class="resize-input">
+                                    <button onclick="applyImageResize('file3')">Apply</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="search-results" id="searchResults">
-                        <div class="search-result" data-type="page">Getting Started</div>
-                        <div class="search-result" data-type="page">Features Overview</div>
-                        <div class="search-result" data-type="page">Configuration</div>
-                        <div class="search-result" data-type="page">API Documentation</div>
+                </div>
+                
+                <div class="section">
+                    <h3 onclick="toggleSection('pagesearch')">
+                        Page Search
+                        <span class="section-arrow">▼</span>
+                    </h3>
+                    <div class="section-content" id="pagesearch-content">
+                        <div class="search-box">
+                            <input type="text" placeholder="Search pages..." id="searchInput">
+                        </div>
+                        <div class="search-results" id="searchResults">
+                            <div class="search-result" data-type="page">Getting Started</div>
+                            <div class="search-result" data-type="page">Features Overview</div>
+                            <div class="search-result" data-type="page">Configuration</div>
+                            <div class="search-result" data-type="page">API Documentation</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -448,12 +754,94 @@ public: true"></textarea>
             console.log('Menu classes:', menu.classList.toString());
         }
         
-        // Close mobile menu when clicking outside
+        function toggleDistractionFree() {
+            const body = document.body;
+            body.classList.toggle('distraction-free');
+            const btn = document.getElementById('distractionBtn');
+            btn.textContent = body.classList.contains('distraction-free') ? '◑' : '◐';
+        }
+        
+        function saveContent() {
+            const textarea = document.querySelector('.editor-area textarea');
+            const frontmatter = document.querySelector('.section textarea');
+            console.log('Saving content:', {
+                content: textarea.value,
+                frontmatter: frontmatter.value
+            });
+            // Here you would implement actual save functionality
+            alert('Content saved successfully!');
+        }
+        
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId + '-content').parentElement;
+            section.classList.toggle('collapsed');
+        }
+        
+        function toggleFileMenu(fileId) {
+            // Close all other menus first
+            document.querySelectorAll('.file-menu').forEach(menu => {
+                if (menu.id !== fileId + '-menu') {
+                    menu.classList.remove('show');
+                }
+            });
+            
+            const menu = document.getElementById(fileId + '-menu');
+            menu.classList.toggle('show');
+        }
+        
+        function renameFile(fileId) {
+            const fileItem = document.getElementById(fileId + '-menu').closest('.file-item');
+            const fileName = fileItem.querySelector('.file-name');
+            const newName = prompt('Enter new filename:', fileName.textContent.trim());
+            if (newName && newName.trim()) {
+                fileName.textContent = newName.trim();
+            }
+            toggleFileMenu(fileId);
+        }
+        
+        function deleteFile(fileId) {
+            if (confirm('Are you sure you want to delete this file?')) {
+                const fileItem = document.getElementById(fileId + '-menu').closest('.file-item');
+                fileItem.remove();
+            }
+        }
+        
+        function showImageResize(fileId) {
+            const resizeDiv = document.getElementById(fileId + '-resize');
+            resizeDiv.style.display = resizeDiv.style.display === 'none' ? 'block' : 'none';
+            toggleFileMenu(fileId);
+        }
+        
+        function applyImageResize(fileId) {
+            const resizeDiv = document.getElementById(fileId + '-resize');
+            const inputs = resizeDiv.querySelectorAll('.resize-input');
+            const width = inputs[0].value;
+            const height = inputs[1].value;
+            
+            const fileName = resizeDiv.closest('.file-item').querySelector('.file-name').textContent.trim();
+            let markdown = `![${fileName}](${fileName}`;
+            if (width || height) {
+                markdown += ` =${width || ''}x${height || ''}`;
+            }
+            markdown += ')';
+            
+            // Insert into editor
+            const textarea = document.querySelector('.editor-area textarea');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + markdown + textarea.value.substring(end);
+            textarea.focus();
+            textarea.setSelectionRange(start + markdown.length, start + markdown.length);
+            
+            resizeDiv.style.display = 'none';
+        }
+        
+        // Close file menus when clicking outside
         document.addEventListener('click', (e) => {
-            const menu = document.getElementById('mobileMenu');
-            const toggle = document.getElementById('menuToggle');
-            if (!menu.contains(e.target) && !toggle.contains(e.target)) {
-                menu.classList.remove('show');
+            if (!e.target.closest('.file-item')) {
+                document.querySelectorAll('.file-menu').forEach(menu => {
+                    menu.classList.remove('show');
+                });
             }
         });
         
@@ -481,10 +869,11 @@ public: true"></textarea>
         });
         
         // Insert links at cursor
-        document.querySelectorAll('.file-item, .search-result').forEach(item => {
+        document.querySelectorAll('.file-name, .search-result').forEach(item => {
             item.addEventListener('click', () => {
                 const textarea = document.querySelector('.editor-area textarea');
-                const isImage = item.dataset.type === 'image';
+                const fileItem = item.closest('.file-item');
+                const isImage = fileItem ? fileItem.dataset.type === 'image' : false;
                 const name = item.textContent.trim();
                 const link = isImage ? `![${name}](${name})` : `[${name}](${name})`;
                 
@@ -494,6 +883,15 @@ public: true"></textarea>
                 textarea.focus();
                 textarea.setSelectionRange(start + link.length, start + link.length);
             });
+        });
+        
+        // Close file menus when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-controls')) {
+                document.querySelectorAll('.file-menu').forEach(menu => {
+                    menu.classList.remove('show');
+                });
+            }
         });
         
         // Search functionality

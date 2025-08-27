@@ -24,18 +24,74 @@
 - Index page
   - show recent posts (based on short code expansion)
 
-- Editor
-  - Edit pages in markdown
-  - Upload images and files
-  - A collapsable side bar with
-    - A box with front matter and metadata
-    - an upload box which will also show items uploaded to the current page
-      - allow resizing images on upload
-      - show a list of uploaded items for the current page
-      - the item in the list is clickable and will insert a link (image if its an image or file link if its another file) at the current cursor position
-      - the upload box also has a drag and drop area
-    - page search box
-      - search results are clickable and will insert a link to the page at the current cursor position
+## Editor Requirements
+
+### Layout & Design
+- **Clean, distraction-free interface** with centered content for optimal readability
+- **Fixed-width layout** (800px max editor width) that adapts intelligently:
+  - Wide screens (≥1400px): Center editor content, sidebar extends to right
+  - Medium screens (1024px-1400px): Traditional centered layout  
+  - Mobile (<1024px): Vertical stack with collapsible sections
+- **Minimal visual hierarchy**: Subtle navigation, prominent editor content
+- **JetBrains Mono font** throughout for consistency and readability
+
+### Navigation & Controls
+- **Compact link bar** above title with essential navigation (Dashboard, Posts, Pages, Files, Preview)
+- **Fixed top-right controls**: Sidebar toggle (≡), Distraction-free mode (◐), Save button (💾)
+- **Left-aligned title** showing current document being edited
+- **Distraction-free mode** that hides all UI except editor content and essential controls
+
+### Sidebar Features
+- **Collapsible sections** with expand/collapse arrows (▼/▶) and persistent state
+- **Navigation section** with emoji-coded links for quick access
+- **Front Matter editor** with YAML syntax for metadata (title, tags, date, visibility)
+- **File Upload system** with:
+  - Drag & drop upload area
+  - Visual file type indicators ([IMG], [FILE], [PAGE])
+  - Inline dropdown menus (⋯) for file management
+  - File operations: Rename, Delete, Image Resize controls
+  - Click-to-insert functionality for markdown links
+- **Page Search** with live results and click-to-link functionality
+
+### File Management
+- **Image resize controls** with width/height inputs
+- **Inline file menus** that expand below file names (no clipping/scrollbars)
+- **File type detection** and appropriate markdown generation
+- **Visual feedback** for all file operations
+
+### Editor Functionality
+- **Markdown editing** with syntax highlighting
+- **Auto-expanding textarea** that grows with content
+- **Cursor position preservation** when inserting links/images
+- **Live link insertion** from sidebar elements
+- **Save functionality** with content and frontmatter persistence
+
+### Responsive Design
+- **Mobile-optimized** navigation with hamburger menu
+- **Touch-friendly** controls and spacing
+- **Adaptive layouts** that maintain functionality across screen sizes
+- **Proper mobile typography** scaling
+
+### Technical Implementation
+- **Pure HTML/CSS/JavaScript** - no framework dependencies  
+- **Semantic HTML** structure with proper accessibility considerations
+- **Progressive enhancement** - works without JavaScript for basic editing
+- **Clean separation** of structure, presentation, and behavior
+- **Performance optimized** with minimal external dependencies
+
+### User Experience
+- **Keyboard-friendly** navigation and shortcuts
+- **Visual feedback** for all interactive elements
+- **Consistent interaction patterns** throughout the interface
+- **Error handling** for file operations and save failures
+- **State persistence** for UI preferences (collapsed sections, etc.)
+
+### Advanced Features  
+- **Live preview** capability (separate window/tab)
+- **Version history** integration hooks
+- **Plugin architecture** for extending functionality
+- **Theme customization** support
+- **Export capabilities** for various formats
 
 
 ## notes on other engines

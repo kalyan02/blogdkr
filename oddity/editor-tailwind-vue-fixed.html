@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oddity Editor - Fixed Layout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'mono': ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-mono bg-white min-h-screen">
+    <div id="app">
+        <!-- Navigation Bar -->
+        <div class="py-1 border-b border-gray-100">
+            <div class="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
+                <!-- Left: Navigation Links -->
+                <div class="flex gap-2 flex-wrap justify-center lg:justify-start">
+                    <a v-for="link in navLinks" :key="link.name" :href="link.href" :target="link.target" 
+                       class="text-gray-600 text-xs px-2 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                       :class="{ 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white': link.primary }">
+                        {{ link.name }}
+                    </a>
+                </div>
+                
+                <!-- Right: Controls -->
+                <div class="flex gap-1 justify-center">
+                    <button @click="toggleSidebar" 
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
+                        {{ sidebarVisible ? '✕' : '≡' }}
+                    </button>
+                    <button @click="toggleDistractionFree" 
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
+                        {{ distractionFree ? '◑' : '◐' }}
+                    </button>
+                    <button @click="saveContent" 
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-green-600 hover:text-white hover:bg-green-600 transition-all">
+                        💾
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Title Bar -->
+        <div class="py-4">
+            <div class="max-w-7xl mx-auto px-4">
+                <span class="text-sm text-gray-700">Editing: {{ currentFile }}</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-6">
+            <!-- Editor Area -->
+            <div class="flex-1 max-w-4xl">
+                <textarea 
+                    v-model="content"
+                    @input="autoResize"
+                    ref="editor"
+                    class="w-full min-h-[600px] border-none p-0 text-sm lg:text-sm text-base leading-relaxed resize-none outline-none bg-transparent font-mono"
+                    :placeholder="editorPlaceholder">
+                </textarea>
+            </div>
+
+            <!-- Sidebar -->
+            <div v-if="sidebarVisible && !distractionFree" class="w-full lg:w-64 flex-shrink-0 lg:order-2 order-2 border-t lg:border-t-0 pt-6 lg:pt-0">
+                
+                <!-- Navigation Section -->
+                <div class="mb-6">
+                    <h3 @click="toggleSection('navigation')" 
+                        class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
+                        Navigation
+                        <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.navigation }">▼</span>
+                    </h3>
+                    <div v-show="sections.navigation" class="space-y-1">
+                        <a v-for="navItem in navigationItems" :key="navItem.name" :href="navItem.href" :target="navItem.target"
+                           class="block text-gray-600 text-xs px-2 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors no-underline"
+                           :class="{ 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white': navItem.primary }">
+                            {{ navItem.emoji }} {{ navItem.name }}
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Front Matter Section -->
+                <div class="mb-6">
+                    <h3 @click="toggleSection('frontmatter')" 
+                        class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
+                        Front Matter
+                        <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.frontmatter }">▼</span>
+                    </h3>
+                    <div v-show="sections.frontmatter">
+                        <textarea v-model="frontmatter"
+                                  class="w-full h-24 text-xs border border-gray-200 p-2 font-mono resize-y outline-none bg-gray-50 focus:border-blue-500 rounded"
+                                  placeholder="title: My Post&#10;tags: [blog, markdown]&#10;date: 2024-01-01&#10;public: true">
+                        </textarea>
+                    </div>
+                </div>
+
+                <!-- File Upload Section -->
+                <div class="mb-6">
+                    <h3 @click="toggleSection('fileupload')" 
+                        class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
+                        File Upload
+                        <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.fileupload }">▼</span>
+                    </h3>
+                    <div v-show="sections.fileupload">
+                        <!-- Upload Area -->
+                        <div @click="triggerFileInput" @drop="handleDrop" @dragover.prevent @dragenter.prevent @dragleave.prevent
+                             class="border-2 border-dashed border-gray-300 p-3 text-center text-gray-600 mb-3 cursor-pointer bg-gray-50 text-xs hover:border-blue-500 hover:bg-blue-50 transition-colors rounded"
+                             :class="{ 'border-blue-500 bg-blue-50 text-blue-600': isDragOver }">
+                            Drop files here or click to upload
+                        </div>
+                        <input ref="fileInput" type="file" multiple class="hidden" @change="handleFileSelect">
+                        
+                        <!-- File List -->
+                        <div class="space-y-1">
+                            <div v-for="file in files" :key="file.id" class="group">
+                                <div class="flex items-center justify-between p-1 hover:bg-gray-50 rounded">
+                                    <span @click="insertFileLink(file)" class="text-xs cursor-pointer flex-1 text-gray-700 hover:text-gray-900">
+                                        <span class="font-semibold" :class="{ 'text-blue-600': file.type === 'image', 'text-gray-600': file.type === 'file' }">
+                                            {{ file.type === 'image' ? '[IMG]' : '[FILE]' }}
+                                        </span>
+                                        {{ file.name }}
+                                    </span>
+                                    <button @click="toggleFileMenu(file.id)" 
+                                            class="text-xs text-gray-400 hover:text-gray-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        ⋯
+                                    </button>
+                                </div>
+                                
+                                <!-- File Menu -->
+                                <div v-show="file.menuOpen" class="mt-1 bg-gray-50 border border-gray-200 rounded p-1">
+                                    <div @click="renameFile(file)" class="text-xs p-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100">Rename</div>
+                                    <div @click="deleteFile(file.id)" class="text-xs p-2 cursor-pointer hover:bg-gray-100 text-red-600" :class="{ 'border-b border-gray-100': file.type === 'image' }">Delete</div>
+                                    <div v-if="file.type === 'image'" @click="toggleImageResize(file.id)" class="text-xs p-2 cursor-pointer hover:bg-gray-100">
+                                        {{ file.resizeOpen ? 'Hide Resize' : 'Resize' }}
+                                    </div>
+                                </div>
+
+                                <!-- Image Resize Controls -->
+                                <div v-if="file.type === 'image' && file.resizeOpen" class="mt-1 p-2 bg-gray-50 rounded border border-gray-200">
+                                    <div class="flex gap-1 items-center">
+                                        <input v-model="file.resizeWidth" type="number" placeholder="Width" class="w-16 p-1 border border-gray-300 rounded text-xs">
+                                        <input v-model="file.resizeHeight" type="number" placeholder="Height" class="w-16 p-1 border border-gray-300 rounded text-xs">
+                                        <button @click="applyImageResize(file)" class="px-2 py-1 bg-blue-600 text-white border-none rounded text-xs cursor-pointer hover:bg-blue-700">Apply</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Page Search Section -->
+                <div class="mb-6">
+                    <h3 @click="toggleSection('search')" 
+                        class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
+                        Page Search
+                        <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.search }">▼</span>
+                    </h3>
+                    <div v-show="sections.search">
+                        <input v-model="searchQuery" @input="performSearch" type="text" placeholder="Search pages..." 
+                               class="w-full p-2 border border-gray-200 text-xs font-mono outline-none bg-gray-50 focus:border-blue-500 rounded mb-3">
+                        
+                        <div class="space-y-1">
+                            <div v-for="result in filteredSearchResults" :key="result.id" @click="insertPageLink(result)"
+                                 class="text-xs p-1 cursor-pointer hover:bg-gray-50 rounded text-gray-700 hover:text-gray-900">
+                                <span class="font-semibold text-green-600">[PAGE]</span>
+                                {{ result.title }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+        
+        createApp({
+            data() {
+                return {
+                    content: '',
+                    frontmatter: 'title: My Post\ntags: [blog, markdown]\ndate: 2024-01-01\npublic: true',
+                    currentFile: 'untitled.md',
+                    distractionFree: false,
+                    sidebarVisible: true,
+                    isDragOver: false,
+                    searchQuery: '',
+                    sections: {
+                        navigation: true,
+                        frontmatter: true,
+                        fileupload: true,
+                        search: true
+                    },
+                    navLinks: [
+                        { name: 'Dashboard', href: '/admin' },
+                        { name: 'Posts', href: '/admin/posts' },
+                        { name: 'Pages', href: '/admin/pages' },
+                        { name: 'Files', href: '/admin/files' },
+                        { name: 'Preview', href: '/preview/untitled', target: '_blank', primary: true }
+                    ],
+                    navigationItems: [
+                        { name: 'Dashboard', href: '/admin', emoji: '📊' },
+                        { name: 'All Posts', href: '/admin/posts', emoji: '📝' },
+                        { name: 'Pages', href: '/admin/pages', emoji: '📄' },
+                        { name: 'Files', href: '/admin/files', emoji: '🗂️' },
+                        { name: 'Preview', href: '/preview/untitled', target: '_blank', emoji: '👁️', primary: true }
+                    ],
+                    files: [
+                        { id: 1, name: 'image1.jpg', type: 'image', menuOpen: false, resizeOpen: false, resizeWidth: '', resizeHeight: '' },
+                        { id: 2, name: 'document.pdf', type: 'file', menuOpen: false },
+                        { id: 3, name: 'screenshot.png', type: 'image', menuOpen: false, resizeOpen: false, resizeWidth: '', resizeHeight: '' }
+                    ],
+                    searchResults: [
+                        { id: 1, title: 'Getting Started' },
+                        { id: 2, title: 'Features Overview' },
+                        { id: 3, title: 'Configuration' },
+                        { id: 4, title: 'API Documentation' },
+                        { id: 5, title: 'Deployment Guide' },
+                        { id: 6, title: 'Troubleshooting' }
+                    ]
+                }
+            },
+            computed: {
+                editorPlaceholder() {
+                    return `# Your markdown content here...
+
+## Features
+- Write in markdown
+- Upload files via sidebar
+- Search and link pages
+- Live preview available
+
+Start writing your content here. The editor is now centered with a fixed maximum width for better readability and focus.`
+                },
+                filteredSearchResults() {
+                    if (!this.searchQuery.trim()) {
+                        return this.searchResults
+                    }
+                    return this.searchResults.filter(result => 
+                        result.title.toLowerCase().includes(this.searchQuery.toLowerCase())
+                    )
+                }
+            },
+            methods: {
+                toggleSidebar() {
+                    this.sidebarVisible = !this.sidebarVisible
+                },
+                toggleDistractionFree() {
+                    this.distractionFree = !this.distractionFree
+                },
+                saveContent() {
+                    console.log('Saving:', { content: this.content, frontmatter: this.frontmatter })
+                    alert('Content saved successfully!')
+                },
+                toggleSection(section) {
+                    this.sections[section] = !this.sections[section]
+                },
+                autoResize(event) {
+                    const textarea = event.target
+                    textarea.style.height = 'auto'
+                    textarea.style.height = Math.max(600, textarea.scrollHeight) + 'px'
+                },
+                triggerFileInput() {
+                    this.$refs.fileInput.click()
+                },
+                handleFileSelect(event) {
+                    const files = Array.from(event.target.files)
+                    files.forEach(file => this.addFile(file))
+                },
+                handleDrop(event) {
+                    event.preventDefault()
+                    this.isDragOver = false
+                    const files = Array.from(event.dataTransfer.files)
+                    files.forEach(file => this.addFile(file))
+                },
+                addFile(file) {
+                    const newFile = {
+                        id: Date.now() + Math.random(),
+                        name: file.name,
+                        type: file.type.startsWith('image/') ? 'image' : 'file',
+                        menuOpen: false,
+                        resizeOpen: false,
+                        resizeWidth: '',
+                        resizeHeight: ''
+                    }
+                    this.files.push(newFile)
+                },
+                toggleFileMenu(fileId) {
+                    this.files.forEach(file => {
+                        if (file.id !== fileId) {
+                            file.menuOpen = false
+                        }
+                    })
+                    const file = this.files.find(f => f.id === fileId)
+                    if (file) {
+                        file.menuOpen = !file.menuOpen
+                    }
+                },
+                renameFile(file) {
+                    const newName = prompt('Enter new filename:', file.name)
+                    if (newName && newName.trim()) {
+                        file.name = newName.trim()
+                    }
+                    file.menuOpen = false
+                },
+                deleteFile(fileId) {
+                    if (confirm('Are you sure you want to delete this file?')) {
+                        const index = this.files.findIndex(f => f.id === fileId)
+                        if (index > -1) {
+                            this.files.splice(index, 1)
+                        }
+                    }
+                },
+                toggleImageResize(fileId) {
+                    const file = this.files.find(f => f.id === fileId)
+                    if (file) {
+                        file.resizeOpen = !file.resizeOpen
+                        file.menuOpen = false
+                    }
+                },
+                applyImageResize(file) {
+                    const width = file.resizeWidth
+                    const height = file.resizeHeight
+                    let markdown = `![${file.name}](${file.name}`
+                    if (width || height) {
+                        markdown += ` =${width || ''}x${height || ''}`
+                    }
+                    markdown += ')'
+                    this.insertAtCursor(markdown)
+                    file.resizeOpen = false
+                },
+                insertFileLink(file) {
+                    const isImage = file.type === 'image'
+                    const link = isImage ? `![${file.name}](${file.name})` : `[${file.name}](${file.name})`
+                    this.insertAtCursor(link)
+                },
+                insertPageLink(page) {
+                    const link = `[${page.title}](${page.title.toLowerCase().replace(/\s+/g, '-')})`
+                    this.insertAtCursor(link)
+                },
+                insertAtCursor(text) {
+                    const textarea = this.$refs.editor
+                    const start = textarea.selectionStart
+                    const end = textarea.selectionEnd
+                    this.content = this.content.substring(0, start) + text + this.content.substring(end)
+                    this.$nextTick(() => {
+                        textarea.focus()
+                        textarea.setSelectionRange(start + text.length, start + text.length)
+                    })
+                },
+                performSearch() {
+                    console.log('Searching for:', this.searchQuery)
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
