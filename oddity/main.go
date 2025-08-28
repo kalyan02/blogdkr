@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -39,21 +40,32 @@ type FileDetail struct {
 	FileName      string
 	FileType      FileType
 	LoadedAt      time.Time
+	CreatedAt     time.Time
 	ModifiedAt    time.Time
 	ParsedContent *ParsedContent
 }
 
 type ContentStuff struct {
 	FileName    map[string]FileDetail
-	SlugFileMap map[string]string
+	SlugFileMap map[string]FileDetail
 	Config      Config
+}
+
+func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
+	if fd, ok := c.FileName[p]; ok {
+		return fd, true
+	}
+	if fd, ok := c.SlugFileMap[p]; ok {
+		return fd, true
+	}
+	return FileDetail{}, false
 }
 
 func NewContentStuff(config Config) *ContentStuff {
 	return &ContentStuff{
 		Config:      config,
 		FileName:    make(map[string]FileDetail),
-		SlugFileMap: make(map[string]string),
+		SlugFileMap: make(map[string]FileDetail),
 	}
 }
 
@@ -71,12 +83,19 @@ func (c *ContentStuff) LoadContent() error {
 			return err
 		}
 
+		var ctime time.Time
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			// convert to time.Time
+			ctime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
+		}
+
 		if info.IsDir() {
 			c.FileName[relPath] = FileDetail{
 				FileName:   relPath,
 				FileType:   FileTypeDirectory,
 				LoadedAt:   time.Now(),
 				ModifiedAt: info.ModTime(),
+				CreatedAt:  ctime,
 			}
 		}
 
@@ -93,7 +112,7 @@ func (c *ContentStuff) LoadContent() error {
 				return err
 			}
 
-			c.FileName[relPath] = FileDetail{
+			fd := FileDetail{
 				FileName:      relPath,
 				ParsedContent: pc,
 				LoadedAt:      time.Now(),
@@ -105,6 +124,15 @@ func (c *ContentStuff) LoadContent() error {
 						return FileTypeHTML
 					}
 				}(),
+				CreatedAt: ctime,
+			}
+			c.FileName[relPath] = fd
+
+			// crreate at <dir>/<slug>
+			pg := NewPageFromFileDetail(&fd)
+			slugPath := filepath.Join(filepath.Dir(relPath), pg.Slug())
+			if slugPath != "" {
+				c.SlugFileMap[slugPath] = fd
 			}
 		}
 		return nil
@@ -130,8 +158,6 @@ func main() {
 
 	r := gin.Default()
 	r.LoadHTMLGlob("tmpl/*")
-	r.Static("/static", "./content/static")
-
 	// auth middleware
 	r.Use(AuthMiddleware())
 
@@ -141,18 +167,62 @@ func main() {
 	r.Run(":8081")
 }
 
+func IsStaticFile(path string) bool {
+	ext := filepath.Ext(path)
+	if ext == "" {
+		return false
+	}
+	// mime types
+	staticExtMap := map[string]bool{
+		".css":   true,
+		".js":    true,
+		".png":   true,
+		".jpg":   true,
+		".jpeg":  true,
+		".gif":   true,
+		".svg":   true,
+		".ico":   true,
+		".woff":  true,
+		".woff2": true,
+		".ttf":   true,
+		".eot":   true,
+		".otf":   true,
+		".mp4":   true,
+		".webm":  true,
+		".ogg":   true,
+		".mp3":   true,
+		".wav":   true,
+		".flac":  true,
+		".pdf":   true,
+		".txt":   true,
+		".zip":   true,
+	}
+	return staticExtMap[ext]
+}
+
 func handleAllContentPages(c *gin.Context) {
 	requestPath := c.Request.URL.Path
+
+	// check if it is a static file is that's requested
+	if IsStaticFile(requestPath) {
+		for _, staticDir := range siteContent.Config.StaticDirs {
+			staticFilePath := filepath.Join(staticDir, requestPath)
+			if _, err := os.Stat(staticFilePath); err == nil {
+				c.File(staticFilePath)
+				return
+			}
+		}
+	}
 
 	// trim suffix
 	requestPath = strings.TrimPrefix(requestPath, "/")
 	requestPath = strings.TrimSuffix(requestPath, "/")
 
 	if requestPath == "" {
-		requestPath = "index"
+		requestPath = "."
 	}
 
-	if file, ok := siteContent.FileName[requestPath]; ok {
+	if file, ok := siteContent.DoPath(requestPath); ok {
 		if file.FileType == FileTypeDirectory {
 			// look for index.md or index.html in this directory
 			renderIndexAtPath(c, requestPath)
@@ -194,31 +264,6 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 		return
 	}
 
-	mdParser := NewMarkdownParser(DefaultParserConfig())
-	headings := mdParser.ExtractHeadings(file.ParsedContent.Body)
-	firstL1 := ""
-	if len(headings) > 0 {
-		for _, h := range headings {
-			if h.Level == 1 {
-				firstL1 = h.Text
-				break
-			}
-		}
-	}
-
-	// check front matter title
-	if file.ParsedContent != nil && file.ParsedContent.Frontmatter != nil {
-		if title, ok := file.ParsedContent.Frontmatter.Data["title"].(string); ok && title != "" {
-			firstL1 = title
-		}
-	}
-
-	// use filename (wihtout dir and extension) as title if no h1 or frontmatter title
-	if firstL1 == "" {
-		base := filepath.Base(file.FileName)
-		firstL1 = strings.TrimSuffix(base, filepath.Ext(base))
-	}
-
 	// get posts in this directory (its relative to content dir)
 	var posts []FileDetail
 	for _, f := range siteContent.FileName {
@@ -232,48 +277,24 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 		}
 	}
 
+	page := NewPageFromFileDetail(&file)
+
 	indexPage := IndexPage{
 		Meta: PageMeta{
-			Title: firstL1,
+			Title: page.Title(),
 		},
-		AboutHTML: template.HTML(file.ParsedContent.HTML),
+		PageHTML: template.HTML(file.ParsedContent.HTML),
 	}
 
 	if len(posts) > 0 {
 		for _, p := range posts {
 			ps := PostSummary{}
+			postPage := NewPageFromFileDetail(&p)
 			if p.ParsedContent != nil && p.ParsedContent.Frontmatter != nil {
-				if title, ok := p.ParsedContent.Frontmatter.Data["title"].(string); ok && title != "" {
-					ps.Title = title
-				} else {
-					base := filepath.Base(p.FileName)
-					ps.Title = strings.TrimSuffix(base, filepath.Ext(base))
-				}
-				if summary, ok := p.ParsedContent.Frontmatter.Data["summary"].(string); ok && summary != "" {
-					ps.Summary = summary
-				}
-				if date, ok := p.ParsedContent.Frontmatter.Data["date"].(string); ok && date != "" {
-					t, err := time.Parse("2006-01-02", date)
-					if err == nil {
-						ps.Date = t
-					}
-				} else {
-					ps.Date = p.ModifiedAt
-				}
-				if tags, ok := p.ParsedContent.Frontmatter.Data["tags"].([]any); ok && len(tags) > 0 {
-					for _, t := range tags {
-						if ts, ok := t.(string); ok {
-							ps.Tags = append(ps.Tags, ts)
-						}
-					}
-				}
-
-				// slug
-				if slug, ok := p.ParsedContent.Frontmatter.Data["slug"].(string); ok && slug != "" {
-					ps.Slug = filepath.Join(filepath.Dir(path), slug)
-				} else {
-					ps.Slug = strings.TrimSuffix(p.FileName, filepath.Ext(p.FileName))
-				}
+				ps.Title = postPage.Title()
+				ps.Date = postPage.DateCreated()
+				ps.Tags = postPage.Hashtags()
+				ps.Slug = postPage.Slug()
 			} else {
 				base := filepath.Base(p.FileName)
 				ps.Title = strings.TrimSuffix(base, filepath.Ext(base))
@@ -292,5 +313,16 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 
 func renderPage(c *gin.Context, file FileDetail) {
 	// load the file content and render it
-	c.String(200, "Rendering page: %s", string(file.ParsedContent.HTML))
+	p := NewPageFromFileDetail(&file)
+	postPage := PostPage{}
+	postPage.Meta = PageMeta{
+		Title: p.Title(),
+	}
+	postPage.ContentHTML = p.SafeHTML()
+	postPage.CreatedDate = p.DateCreated()
+	//postPage.ModifiedDate = p.DateModified()
+
+	c.HTML(200, "post.html", postPage)
+
+	//c.String(200, "Rendering page: %s", string(file.ParsedContent.HTML))
 }

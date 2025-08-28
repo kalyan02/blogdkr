@@ -52,30 +52,34 @@
 
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 py-8">
-        <!-- Post Header -->
-        <header class="mb-8 border-b border-gray-100 pb-6">
-            <h1 class="text-2xl font-bold text-gray-900 mb-4">{{.Meta.Title}}</h1>
-
-            {{ if or .Date .ReadingTime .Tags }}
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-gray-500 uppercase tracking-wider">
-                <div class="flex items-center gap-4">
-                    {{if .Date}}
-                    <time>{{.Date.Format "January 2, 2006"}}</time>
-                    {{end}}
-
-                    {{if .ReadingTime}}
-                    <span>{{.ReadingTime}} min read</span>
-                    {{end}}
-                </div>
-                
-                {{if .Tags}}
-                <div class="flex flex-wrap gap-1">
-                    {{range .Tags}}
-                    <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                        {{.}}
-                    </span>
-                    {{end}}
-                </div>
+        <!-- Page Header -->
+        <header class="mb-8 pb-4">
+            <h1 class="text-2xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
+            
+            <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                <span>Created {{.CreatedDate.Format "2006-01-02"}}</span>
+                {{if .ModifiedDate}}
+                {{if ne .CreatedDate.Format "2006-01-02" .ModifiedDate.Format "2006-01-02"}}
+                <span>•</span>
+                <span>Modified {{.ModifiedDate.Format "2006-01-02"}}</span>
+                {{end}}
+                {{end}}
+                {{if .WordCount}}
+                <span>•</span>
+                <span>{{.WordCount}} words</span>
+                {{end}}
+                {{if .ReadingTime}}
+                <span>•</span>
+                <span>{{.ReadingTime}}m read</span>
+                {{end}}
+            </div>
+            
+            {{if .Tags}}
+            <div class="flex flex-wrap gap-2 mt-3">
+                {{range .Tags}}
+                <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                    {{.}}
+                </span>
                 {{end}}
             </div>
             {{end}}
@@ -105,21 +109,45 @@
             </div>
         </footer>
 
-        <!-- Related Posts or Comments Section -->
-        {{if .RelatedPosts}}
-        <section class="mt-16 pt-8 border-t border-gray-100">
-            <h3 class="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider">Related Posts</h3>
-            <div class="space-y-3">
-                {{range .RelatedPosts}}
-                <div>
-                    <a href="/{{.Slug}}" class="text-sm text-gray-700 hover:text-gray-900 transition-colors">
-                        {{.Title}}
-                    </a>
-                    <span class="text-xs text-gray-500 ml-2">{{.Date.Format "2006-01-02"}}</span>
+        <!-- Wiki-style Links Section -->
+        {{if or .LinkedPages .Backlinks}}
+        <div class="mt-12 pt-8 border-t border-gray-100 space-y-8">
+            {{if .LinkedPages}}
+            <section>
+                <h3 class="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Linked Pages</h3>
+                <div class="space-y-2">
+                    {{range .LinkedPages}}
+                    <div>
+                        <a href="/{{.Slug}}" class="text-sm text-blue-600 hover:text-blue-800 transition-colors">
+                            {{.Title}}
+                        </a>
+                        {{if .Excerpt}}
+                        <p class="text-xs text-gray-600 mt-1">{{.Excerpt}}</p>
+                        {{end}}
+                    </div>
+                    {{end}}
                 </div>
-                {{end}}
-            </div>
-        </section>
+            </section>
+            {{end}}
+
+            {{if .Backlinks}}
+            <section>
+                <h3 class="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Backlinks</h3>
+                <div class="space-y-2">
+                    {{range .Backlinks}}
+                    <div>
+                        <a href="/{{.Slug}}" class="text-sm text-green-600 hover:text-green-800 transition-colors">
+                            {{.Title}}
+                        </a>
+                        {{if .Excerpt}}
+                        <p class="text-xs text-gray-600 mt-1">{{.Excerpt}}</p>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+            </section>
+            {{end}}
+        </div>
         {{end}}
 
         <!-- Site Footer -->

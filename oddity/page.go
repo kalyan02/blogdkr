@@ -3,7 +3,10 @@ package main
 import (
 	"html/template"
 	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type ImageData struct {
@@ -12,40 +15,127 @@ type ImageData struct {
 }
 
 type Page struct {
-	Title    string
-	FileName string //from content root
-	Body     []byte
-	HTML     template.HTML
-	Hashtags []string
+	File *FileDetail
+}
+
+func NewPageFromFileDetail(f *FileDetail) *Page {
+	return &Page{File: f}
+}
+
+func (p *Page) Title() string {
+	firstL1 := ""
+
+	mdParser := NewMarkdownParser(DefaultParserConfig())
+	headings := mdParser.ExtractHeadings(p.File.ParsedContent.Body)
+	if len(headings) > 0 {
+		for _, h := range headings {
+			if h.Level == 1 {
+				firstL1 = h.Text
+				break
+			}
+		}
+	}
+
+	// check front matter title
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
+		if title, ok := p.File.ParsedContent.Frontmatter.Data["title"].(string); ok && title != "" {
+			firstL1 = title
+		}
+	}
+
+	// use filename (wihtout dir and extension) as title if no h1 or frontmatter title
+	if firstL1 == "" {
+		base := filepath.Base(p.File.FileName)
+		firstL1 = strings.TrimSuffix(base, filepath.Ext(base))
+	}
+
+	return firstL1
+}
+
+func (p *Page) Hashtags() []string {
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Hashtags != nil {
+		return p.File.ParsedContent.Hashtags
+	}
+	return nil
+}
+
+func (p *Page) DateCreated() time.Time {
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
+		if created, ok := p.File.ParsedContent.Frontmatter.Data["created"].(string); ok && created != "" {
+			if ts, err := strconv.ParseInt(created, 10, 64); err == nil {
+				return time.Unix(ts/1000, 0)
+			}
+		}
+	}
+	if !p.File.CreatedAt.IsZero() {
+		return p.File.CreatedAt
+	}
+
+	return p.File.ModifiedAt
+}
+
+func (p *Page) SafeHTML() template.HTML {
+	if p.File.ParsedContent != nil {
+		return template.HTML(p.File.ParsedContent.HTML)
+	}
+	return ""
+}
+
+func (p *Page) Slug() string {
+	pgslug := ""
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
+		if slug, ok := p.File.ParsedContent.Frontmatter.Data["slug"].(string); ok && slug != "" {
+			pgslug = slug
+			pgslug = filepath.Join(filepath.Dir(p.File.FileName), pgslug)
+		}
+	}
+	if pgslug == "" {
+		pgslug = strings.TrimSuffix(filepath.Base(p.File.FileName), filepath.Ext(p.File.FileName))
+	}
+	return pgslug
+}
+
+func parseUnixMilliOrSeconds(ts string) (time.Time, error) {
+	if len(ts) == 0 {
+		return time.Time{}, nil
+	}
+	// try milliseconds
+	if tsm, err := strconv.ParseInt(ts, 10, 64); err == nil {
+		if tsm > 1e12 {
+			return time.Unix(tsm/1000, 0), nil
+		}
+		return time.Unix(tsm, 0), nil
+	} else {
+		return time.Time{}, err
+	}
+}
+
+func (p *Page) DateModified() *time.Time {
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
+		if modified, ok := p.File.ParsedContent.Frontmatter.Data["modified"].(string); ok && modified != "" {
+			if t, err := parseUnixMilliOrSeconds(modified); err == nil && !t.IsZero() {
+				return &t
+			}
+		}
+		// updated
+		if updated, ok := p.File.ParsedContent.Frontmatter.Data["updated"].(string); ok && updated != "" {
+			if t, err := parseUnixMilliOrSeconds(updated); err == nil && !t.IsZero() {
+				return &t
+			}
+		}
+	}
+	if !p.File.ModifiedAt.IsZero() {
+		return &p.File.ModifiedAt
+	}
+	return nil
 }
 
 func (p *Page) Dir() string {
-	d := path.Dir(p.FileName)
+	d := path.Dir(p.File.FileName)
 	if d == "." {
 		return ""
 	}
 	return pathEncode(d) + "/"
-}
-
-// plainText renders the Page.Body to plain text
-func (p *Page) plainText() string {
-	parser := NewMarkdownParser(DefaultParserConfig())
-	content, err := parser.Parse(p.Body)
-	if err != nil {
-		// Fallback to basic plain text conversion
-		return string(p.Body)
-	}
-	return content.PlainText
-}
-
-// images returns an array of ImageData found in the page
-func (p *Page) images() []ImageData {
-	parser := NewMarkdownParser(DefaultParserConfig())
-	content, err := parser.Parse(p.Body)
-	if err != nil {
-		return []ImageData{}
-	}
-	return content.Images
 }
 
 const upperhex = "0123456789ABCDEF"

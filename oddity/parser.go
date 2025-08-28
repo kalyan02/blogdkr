@@ -742,15 +742,15 @@ func (fm *FrontmatterData) HasKey(key string) bool {
 }
 
 // renderHtml updates a Page with parsed HTML content
-func (p *Page) renderHtml() {
-	mdParser := NewMarkdownParser(DefaultParserConfig())
-	content, err := mdParser.Parse(p.Body)
-	if err != nil || content == nil {
-		// For backwards compatibility, continue with basic parsing on error
-		p.HTML = "error rendering"
-		return
-	}
-
-	p.HTML = template.HTML(content.HTML)
-	p.Hashtags = content.Hashtags
-}
+//func (p *Page) renderHtml() {
+//	mdParser := NewMarkdownParser(DefaultParserConfig())
+//	content, err := mdParser.Parse(p.Body)
+//	if err != nil || content == nil {
+//		// For backwards compatibility, continue with basic parsing on error
+//		p.HTML = "error rendering"
+//		return
+//	}
+//
+//	p.HTML = template.HTML(content.HTML)
+//	p.Hashtags = content.Hashtags
+//}

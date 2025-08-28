@@ -32,24 +32,27 @@ type PageMeta struct {
 	CanonicalURL string    `json:"canonical_url,omitempty"`
 }
 
-// BlogPage represents the data structure for rendering individual blog posts
-type BlogPage struct {
+// PostPage represents the data structure for rendering individual posts/pages
+type PostPage struct {
 	// Common page data
 	Site SiteConfig `json:"site"`
 	Meta PageMeta   `json:"meta"`
 
-	// Post-specific metadata
-	Date        time.Time `json:"date"`
-	ReadingTime int       `json:"reading_time"` // in minutes
-	Tags        []string  `json:"tags"`
-	Slug        string    `json:"slug"`
-	EditURL     string    `json:"edit_url,omitempty"`
+	// Page-specific metadata
+	CreatedDate  time.Time  `json:"created_date"`
+	ModifiedDate *time.Time `json:"modified_date"`
+	ReadingTime  int        `json:"reading_time"` // in minutes
+	Tags         []string   `json:"tags"`
+	Slug         string     `json:"slug"`
+	EditURL      string     `json:"edit_url,omitempty"`
 
 	// Content
 	ContentHTML template.HTML `json:"content_html"`
 
-	// Related content
-	RelatedPosts []RelatedPost `json:"related_posts,omitempty"`
+	// Wiki-like features
+	Backlinks   []WikiLink `json:"backlinks,omitempty"`
+	LinkedPages []WikiLink `json:"linked_pages,omitempty"`
+	WordCount   int        `json:"word_count,omitempty"`
 }
 
 // IndexPage represents the data structure for rendering the main blog index
@@ -59,8 +62,8 @@ type IndexPage struct {
 	Meta PageMeta   `json:"meta"`
 
 	// Content
-	AboutHTML template.HTML `json:"about_html"`
-	Posts     []PostSummary `json:"posts"`
+	PageHTML template.HTML `json:"page_html"`
+	Posts    []PostSummary `json:"posts"`
 }
 
 // PostSummary represents a blog post in list/summary format
@@ -112,6 +115,13 @@ type Archive struct {
 	Count int `json:"count"`
 }
 
+// WikiLink represents a wiki-style link between pages
+type WikiLink struct {
+	Title   string `json:"title"`
+	Slug    string `json:"slug"`
+	Excerpt string `json:"excerpt,omitempty"`
+}
+
 // Constructor functions for easy creation
 
 // NewSiteConfig creates a new SiteConfig with default navigation
@@ -126,20 +136,22 @@ func NewSiteConfig(title string) *SiteConfig {
 	}
 }
 
-// NewBlogPage creates a new BlogPage with default values
-func NewBlogPage(title string, site *SiteConfig) *BlogPage {
+// NewPostPage creates a new PostPage with default values
+func NewPostPage(title string, site *SiteConfig) *PostPage {
 	if site == nil {
-		site = NewSiteConfig("Blog")
+		site = NewSiteConfig("Wiki")
 	}
 
-	return &BlogPage{
+	return &PostPage{
 		Site: *site,
 		Meta: PageMeta{
 			Title: title,
 		},
-		Date:         time.Now(),
+		CreatedDate:  time.Now(),
+		ModifiedDate: nil,
 		Tags:         make([]string, 0),
-		RelatedPosts: make([]RelatedPost, 0),
+		Backlinks:    make([]WikiLink, 0),
+		LinkedPages:  make([]WikiLink, 0),
 	}
 }
 

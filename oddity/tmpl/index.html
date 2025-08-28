@@ -27,7 +27,7 @@
 <body class="font-mono bg-white min-h-screen">
     <!-- Navigation Bar -->
     <div class="py-1 border-b-0 border-gray-100">
-        <div class="max-w-7xl mx-auto px-2 pt-2 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
+        <div class="max-w-4xl mx-auto px-2 pt-2 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
             <!-- Left: Site Title -->
             <div class="flex gap-1 flex-wrap justify-center lg:justify-start">
                 <a href="/" class="text-gray-900 text-sm font-semibold px-1 py-1 rounded hover:bg-gray-100 transition-colors">
@@ -51,11 +51,11 @@
     </div>
 
     <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto px-4 py-8">
         <!-- About Section -->
         <div class="mb-12">
             <div class="prose prose-sm max-w-none font-mono text-sm leading-relaxed">
-                {{.AboutHTML}}
+                {{.PageHTML}}
             </div>
         </div>
 
