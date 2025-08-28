@@ -462,42 +462,21 @@ func (mp *MarkdownParser) shortcodeParser() func(*parser.Parser, []byte, int) (i
 			})
 		}
 
-		// Return a placeholder span for now - rendering happens separately
-		return i + 2, &ast.HTMLSpan{
+		rendered := &ast.HTMLSpan{
 			Leaf: ast.Leaf{Literal: []byte("{{" + shortcodeName + "}}")},
 		}
+
+		if mp.config.ShortcodeRenderer != nil {
+			renderedShortcode := mp.config.ShortcodeRenderer(shortcodeName)
+			rendered = &ast.HTMLSpan{
+				Leaf: ast.Leaf{Literal: []byte(renderedShortcode)},
+			}
+		}
+
+		// Return a placeholder span for now - rendering happens separately
+		return i + 2, rendered
 	}
 }
-
-//// Render applies replacements to HTML content using the provided RenderConfig
-//func (result *ParsedContent) Render(config *RenderConfig) template.HTML {
-//	if config == nil {
-//		config = DefaultRenderConfig()
-//	}
-//
-//	htmlBytes := markdown.ToHTML(result.Body, result.mdparser.parser, result.mdparser.renderer)
-//	htmlString := string(htmlBytes)
-//
-//	// Replace wiki link placeholders
-//	if config.WikiLinkRenderer != nil {
-//		for _, linkText := range result.WikiLinks {
-//			placeholder := "[[" + linkText + "]]"
-//			replacement := config.WikiLinkRenderer(linkText)
-//			htmlString = strings.ReplaceAll(htmlString, placeholder, replacement)
-//		}
-//	}
-//
-//	// Replace shortcode placeholders
-//	if config.ShortcodeRenderer != nil {
-//		for _, shortcode := range result.Shortcodes {
-//			placeholder := "{{" + shortcode.Name + "}}"
-//			replacement := config.ShortcodeRenderer(shortcode.Name)
-//			htmlString = strings.ReplaceAll(htmlString, placeholder, replacement)
-//		}
-//	}
-//
-//	return template.HTML(htmlString)
-//}
 
 // nodeToString extracts text content from an AST node
 func (mp *MarkdownParser) nodeToString(node ast.Node) string {
@@ -511,27 +490,6 @@ func (mp *MarkdownParser) nodeToString(node ast.Node) string {
 		return ast.GoToNext
 	})
 	return buffer.String()
-}
-
-// plainText renders the Page.Body to plain text
-func (p *Page) plainText() string {
-	parser := NewMarkdownParser(DefaultParserConfig())
-	content, err := parser.Parse(p.Body)
-	if err != nil {
-		// Fallback to basic plain text conversion
-		return string(p.Body)
-	}
-	return content.PlainText
-}
-
-// images returns an array of ImageData found in the page
-func (p *Page) images() []ImageData {
-	parser := NewMarkdownParser(DefaultParserConfig())
-	content, err := parser.Parse(p.Body)
-	if err != nil {
-		return []ImageData{}
-	}
-	return content.Images
 }
 
 // hashtags extracts hashtags from markdown content
