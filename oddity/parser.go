@@ -85,6 +85,7 @@ type ParsedContent struct {
 	Images      []ImageData
 	WikiLinks   []string
 	Shortcodes  []ShortcodeData
+	Headings    []HeadingData
 
 	mdparser *MarkdownParser
 	HTML     []byte
@@ -193,6 +194,8 @@ func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 			return nil, fmt.Errorf("frontmatter parsing error: %w", err)
 		}
 	}
+
+	result.Headings = mp.ExtractHeadings(bodyContent)
 
 	result.Body = bodyContent
 	result.HTML = markdown.ToHTML(bodyContent, mp.parser, mp.renderer)

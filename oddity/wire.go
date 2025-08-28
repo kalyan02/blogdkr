@@ -272,6 +272,62 @@ func (w *Wire) findAffectedWatchers(filePath string, fileDetail FileDetail) []Qu
 	return affected
 }
 
+// NotifyAll refreshes all queries that might be affected by the specified file change
+func (w *Wire) NotifyAll(modifiedFile string) error {
+	// Look up file in content store
+	fileDetail, exists := w.content.FileName[modifiedFile]
+	if !exists {
+		return fmt.Errorf("file not found in content store: %s", modifiedFile)
+	}
+
+	// Find all queries that might be affected by this file change
+	affectedQueries := make([]QueryLocation, 0)
+
+	// Check all queries across all files
+	for _, queryList := range w.queries {
+		for _, query := range queryList {
+			if w.shouldRefreshQuery(query, modifiedFile, fileDetail) {
+				affectedQueries = append(affectedQueries, query)
+			}
+		}
+	}
+
+	// Update all affected queries
+	for _, query := range affectedQueries {
+		if err := w.updateQuery(query); err != nil {
+			return fmt.Errorf("error updating query in %s: %v", query.FilePath, err)
+		}
+	}
+
+	return nil
+}
+
+// shouldRefreshQuery determines if a query should be refreshed based on the modified file
+func (w *Wire) shouldRefreshQuery(query QueryLocation, modifiedFile string, fileDetail FileDetail) bool {
+	// Skip if the query file itself was modified (avoid infinite loops)
+	if query.FilePath == modifiedFile {
+		return false
+	}
+
+	switch query.Query.Type {
+	case QueryPosts, QueryPages:
+		// Posts/pages queries should refresh when any content file changes
+		if fileDetail.FileType == FileTypeMarkdown || fileDetail.FileType == FileTypeHTML {
+			// If query has path filtering, check if modified file matches
+			if query.Query.Path != "" {
+				return w.matchesPathPattern(modifiedFile, query.Query.Path)
+			}
+			// No path filter means all content files are relevant
+			return !strings.HasSuffix(modifiedFile, "index.md") && !strings.HasSuffix(modifiedFile, "_index.md")
+		}
+	case QueryBacklinks:
+		// Backlinks queries should refresh when files with links change
+		return fileDetail.ParsedContent != nil && len(fileDetail.ParsedContent.WikiLinks) > 0
+	}
+
+	return false
+}
+
 // updateQuery re-executes a query and updates the file
 func (w *Wire) updateQuery(location QueryLocation) error {
 	// Execute the query to get new results
@@ -407,10 +463,26 @@ func (w *Wire) applySortToFiles(files []FileDetail, query *QueryAST) []FileDetai
 	sort.Slice(files, func(i, j int) bool {
 		switch query.Sort {
 		case SortDate, SortModified, SortRecent:
-			if query.Order == SortDesc {
-				return files[i].ModifiedAt.After(files[j].ModifiedAt)
+			pgi := NewPageFromFileDetail(&files[i])
+			pgj := NewPageFromFileDetail(&files[j])
+
+			datei := pgi.DateCreated()
+			datej := pgj.DateCreated()
+
+			if datei == nil && datej == nil {
+				return false
 			}
-			return files[i].ModifiedAt.Before(files[j].ModifiedAt)
+			if datei == nil {
+				return false
+			}
+			if datej == nil {
+				return true
+			}
+
+			if query.Order == SortDesc {
+				return datei.After(*datej)
+			}
+			return datei.Before(*datej)
 		case SortTitle:
 			titleI := w.getTitleFromFile(files[i])
 			titleJ := w.getTitleFromFile(files[j])
@@ -438,13 +510,13 @@ func (w *Wire) formatResults(files []FileDetail, format FormatType) ([]string, e
 		page := NewPageFromFileDetail(&file)
 		title := page.Title()
 		slug := page.Slug()
-		date := file.ModifiedAt.Format("2006-01-02")
+		date := page.DateCreated().Format("2006-01-02")
 
 		switch format {
 		case FormatList:
 			results = append(results, fmt.Sprintf("- [%s](%s)", title, slug))
-		case FormatCompact:
-			results = append(results, fmt.Sprintf("- [%s](%s) - %s", title, slug, date))
+		case FormatListWithDate:
+			results = append(results, fmt.Sprintf("- %s - [%s](%s)", date, title, slug))
 		case FormatDetailed:
 			results = append(results, fmt.Sprintf("- [%s](%s)", title, slug))
 			results = append(results, fmt.Sprintf("  Date: %s", date))

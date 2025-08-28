@@ -39,7 +39,7 @@ type PostPage struct {
 	Meta PageMeta   `json:"meta"`
 
 	// Page-specific metadata
-	CreatedDate  time.Time  `json:"created_date"`
+	CreatedDate  *time.Time `json:"created_date"`
 	ModifiedDate *time.Time `json:"modified_date"`
 	ReadingTime  int        `json:"reading_time"` // in minutes
 	Tags         []string   `json:"tags"`
@@ -47,7 +47,7 @@ type PostPage struct {
 	EditURL      string     `json:"edit_url,omitempty"`
 
 	// Content
-	ContentHTML template.HTML `json:"content_html"`
+	PageHTML template.HTML `json:"page_html"`
 
 	// Wiki-like features
 	Backlinks   []WikiLink `json:"backlinks,omitempty"`
@@ -147,7 +147,7 @@ func NewPostPage(title string, site *SiteConfig) *PostPage {
 		Meta: PageMeta{
 			Title: title,
 		},
-		CreatedDate:  time.Now(),
+		CreatedDate:  nil,
 		ModifiedDate: nil,
 		Tags:         make([]string, 0),
 		Backlinks:    make([]WikiLink, 0),

@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -52,26 +53,28 @@ func (p *Page) Title() string {
 	return firstL1
 }
 
+var titleRegexp = regexp.MustCompile("(?m)^#\\s*(.*)\n+")
+
+func (p *Page) Body(noTitle bool) []byte {
+	s := string(p.File.ParsedContent.Body)
+	m := titleRegexp.FindStringSubmatch(s)
+	if m != nil {
+		if noTitle {
+			return []byte(strings.Replace(s, m[0], "", 1))
+		}
+	}
+	return nil
+}
+
+func (p *Page) BodyNoTitle() []byte {
+	return p.Body(true)
+}
+
 func (p *Page) Hashtags() []string {
 	if p.File.ParsedContent != nil && p.File.ParsedContent.Hashtags != nil {
 		return p.File.ParsedContent.Hashtags
 	}
 	return nil
-}
-
-func (p *Page) DateCreated() time.Time {
-	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
-		if created, ok := p.File.ParsedContent.Frontmatter.Data["created"].(string); ok && created != "" {
-			if ts, err := strconv.ParseInt(created, 10, 64); err == nil {
-				return time.Unix(ts/1000, 0)
-			}
-		}
-	}
-	if !p.File.CreatedAt.IsZero() {
-		return p.File.CreatedAt
-	}
-
-	return p.File.ModifiedAt
 }
 
 func (p *Page) SafeHTML() template.HTML {
@@ -95,33 +98,72 @@ func (p *Page) Slug() string {
 	return pgslug
 }
 
+func timeFromMilliOrSeconds(ts int64) time.Time {
+	if ts > 1e12 {
+		return time.Unix(ts/1000, 0)
+	}
+	return time.Unix(ts, 0)
+}
+
 func parseUnixMilliOrSeconds(ts string) (time.Time, error) {
 	if len(ts) == 0 {
 		return time.Time{}, nil
 	}
 	// try milliseconds
 	if tsm, err := strconv.ParseInt(ts, 10, 64); err == nil {
-		if tsm > 1e12 {
-			return time.Unix(tsm/1000, 0), nil
-		}
-		return time.Unix(tsm, 0), nil
+		return timeFromMilliOrSeconds(tsm), nil
 	} else {
 		return time.Time{}, err
 	}
 }
 
-func (p *Page) DateModified() *time.Time {
+func (p *Page) tryParseTimeField(field string) (time.Time, bool) {
 	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
-		if modified, ok := p.File.ParsedContent.Frontmatter.Data["modified"].(string); ok && modified != "" {
-			if t, err := parseUnixMilliOrSeconds(modified); err == nil && !t.IsZero() {
-				return &t
+		if strVal, ok := p.File.ParsedContent.Frontmatter.Data[field].(string); ok && strVal != "" {
+			if t, err := parseUnixMilliOrSeconds(strVal); err == nil && !t.IsZero() {
+				return t, true
 			}
 		}
-		// updated
-		if updated, ok := p.File.ParsedContent.Frontmatter.Data["updated"].(string); ok && updated != "" {
-			if t, err := parseUnixMilliOrSeconds(updated); err == nil && !t.IsZero() {
-				return &t
-			}
+		// if integer type
+		if intVal, ok := p.File.ParsedContent.Frontmatter.Data[field].(int); ok && intVal != 0 {
+			return timeFromMilliOrSeconds(int64(intVal)), true
+		}
+		if int64Val, ok := p.File.ParsedContent.Frontmatter.Data[field].(int64); ok && int64Val != 0 {
+			return timeFromMilliOrSeconds(int64Val), true
+		}
+	}
+	return time.Time{}, false
+}
+
+func (p *Page) DateCreated() *time.Time {
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
+		if created, ok := p.tryParseTimeField("created"); ok {
+			return &created
+		}
+		if created, ok := p.tryParseTimeField("_created"); ok {
+			return &created
+		}
+		if date, ok := p.tryParseTimeField("date"); ok {
+			return &date
+		}
+	}
+	if !p.File.CreatedAt.IsZero() {
+		return &p.File.CreatedAt
+	}
+
+	return nil
+}
+
+func (p *Page) DateModified() *time.Time {
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
+		if modified, ok := p.tryParseTimeField("modified"); ok {
+			return &modified
+		}
+		if modified, ok := p.tryParseTimeField("_modified"); ok {
+			return &modified
+		}
+		if updated, ok := p.tryParseTimeField("updated"); ok {
+			return &updated
 		}
 	}
 	if !p.File.ModifiedAt.IsZero() {

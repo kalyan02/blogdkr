@@ -51,10 +51,10 @@ const (
 type FormatType string
 
 const (
-	FormatList     FormatType = "list"
-	FormatTable    FormatType = "table"
-	FormatCompact  FormatType = "compact"
-	FormatDetailed FormatType = "detailed"
+	FormatList         FormatType = "list"
+	FormatTable        FormatType = "table"
+	FormatListWithDate FormatType = "list-date"
+	FormatDetailed     FormatType = "detailed"
 )
 
 // QueryFilter represents a filter condition
@@ -130,6 +130,8 @@ func ParseQuery(queryString string) (*QueryAST, error) {
 	// Parse sort type
 	if queryXML.Sort != "" {
 		query.Sort = SortType(strings.ToLower(queryXML.Sort))
+	} else {
+		query.Sort = SortRecent // default
 	}
 
 	// Parse sort order
@@ -155,7 +157,7 @@ func ParseQuery(queryString string) (*QueryAST, error) {
 	if queryXML.MDFormat != "" {
 		query.MDFormat = FormatType(strings.ToLower(queryXML.MDFormat))
 	} else {
-		query.MDFormat = FormatList // default
+		query.MDFormat = FormatListWithDate // default
 	}
 
 	// Parse filters

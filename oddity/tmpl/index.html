@@ -52,6 +52,9 @@
 
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 py-8">
+        <header class="mb-8 pb-4">
+            <h1 class="text-2xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
+        </header>
         <!-- About Section -->
         <div class="mb-12">
             <div class="prose prose-sm max-w-none font-mono text-sm leading-relaxed">
@@ -60,6 +63,7 @@
         </div>
 
         <!-- Posts Section -->
+        {{ if .Posts }}
         <div>
             <h2 class="text-lg font-semibold text-gray-900 mb-4 uppercase tracking-wider">Recent Posts</h2>
             <div class="space-y-1">
@@ -75,6 +79,7 @@
                 {{end}}
             </div>
         </div>
+        {{end}}
 
         <!-- Footer -->
         <div class="mt-16 pt-8 border-t border-gray-100 text-center">

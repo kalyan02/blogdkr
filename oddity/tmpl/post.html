@@ -53,11 +53,14 @@
     <!-- Main Content -->
     <div class="max-w-4xl mx-auto px-4 py-8">
         <!-- Page Header -->
-        <header class="mb-8 pb-4">
+        <header class="mb-4 pb-4">
             <h1 class="text-2xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
-            
+
+            {{if or .CreatedDate .ModifiedDate .WordCount .ReadingTime}}
             <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                {{if .CreatedDate}}
                 <span>Created {{.CreatedDate.Format "2006-01-02"}}</span>
+                {{end}}
                 {{if .ModifiedDate}}
                 {{if ne .CreatedDate.Format "2006-01-02" .ModifiedDate.Format "2006-01-02"}}
                 <span>•</span>
@@ -73,6 +76,7 @@
                 <span>{{.ReadingTime}}m read</span>
                 {{end}}
             </div>
+            {{end}}
             
             {{if .Tags}}
             <div class="flex flex-wrap gap-2 mt-3">
@@ -87,7 +91,7 @@
 
         <!-- Post Content -->
         <article class="prose prose-sm max-w-none font-mono text-sm leading-relaxed">
-            {{.ContentHTML}}
+            {{.PageHTML}}
         </article>
 
         <!-- Post Footer -->

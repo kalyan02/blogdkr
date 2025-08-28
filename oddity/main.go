@@ -1,11 +1,10 @@
 package main
 
 import (
-	"html/template"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -25,6 +24,20 @@ var DefaultConfig = Config{
 	ContentDir: "content/content",
 	StaticDirs: []string{"content/static"},
 	Port:       8081,
+}
+
+var SC = SiteConfig{
+	Title: "Kalyan",
+	Navigation: []NavigationLink{
+		{
+			Name: "Home",
+			URL:  "/",
+		},
+		{
+			Name: "About",
+			URL:  "/about",
+		},
+	},
 }
 
 type FileType int
@@ -130,7 +143,7 @@ func (c *ContentStuff) LoadContent() error {
 
 			// crreate at <dir>/<slug>
 			pg := NewPageFromFileDetail(&fd)
-			slugPath := filepath.Join(filepath.Dir(relPath), pg.Slug())
+			slugPath := pg.Slug()
 			if slugPath != "" {
 				c.SlugFileMap[slugPath] = fd
 			}
@@ -292,46 +305,50 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 
 	page := NewPageFromFileDetail(&file)
 
-	indexPage := IndexPage{
+	indexPage := PostPage{
+		Site: SC,
 		Meta: PageMeta{
 			Title: page.Title(),
 		},
-		PageHTML: template.HTML(file.ParsedContent.HTML),
+		PageHTML: page.SafeHTML(),
 	}
 
-	if len(posts) > 0 {
-		for _, p := range posts {
-			ps := PostSummary{}
-			postPage := NewPageFromFileDetail(&p)
-			if p.ParsedContent != nil && p.ParsedContent.Frontmatter != nil {
-				ps.Title = postPage.Title()
-				ps.Date = postPage.DateCreated()
-				ps.Tags = postPage.Hashtags()
-				ps.Slug = postPage.Slug()
-			} else {
-				base := filepath.Base(p.FileName)
-				ps.Title = strings.TrimSuffix(base, filepath.Ext(base))
-			}
+	//if len(posts) > 0 {
+	//	for _, p := range posts {
+	//		ps := PostSummary{}
+	//		postPage := NewPageFromFileDetail(&p)
+	//		if p.ParsedContent != nil && p.ParsedContent.Frontmatter != nil {
+	//			ps.Title = postPage.Title()
+	//			ps.Date = postPage.DateCreated()
+	//			ps.Tags = postPage.Hashtags()
+	//			ps.Slug = postPage.Slug()
+	//		} else {
+	//			base := filepath.Base(p.FileName)
+	//			ps.Title = strings.TrimSuffix(base, filepath.Ext(base))
+	//		}
+	//
+	//		indexPage.Posts = append(indexPage.Posts, ps)
+	//	}
+	//	// sort posts by date desc
+	//	sort.Slice(indexPage.Posts, func(i, j int) bool {
+	//		return indexPage.Posts[i].Date.After(indexPage.Posts[j].Date)
+	//	})
+	//}
 
-			indexPage.Posts = append(indexPage.Posts, ps)
-		}
-		// sort posts by date desc
-		sort.Slice(indexPage.Posts, func(i, j int) bool {
-			return indexPage.Posts[i].Date.After(indexPage.Posts[j].Date)
-		})
-	}
-
-	c.HTML(200, "index.html", indexPage)
+	c.HTML(200, "post.html", indexPage)
+	fmt.Println(c.Errors)
 }
 
 func renderPage(c *gin.Context, file FileDetail) {
 	// load the file content and render it
 	p := NewPageFromFileDetail(&file)
-	postPage := PostPage{}
+	postPage := PostPage{
+		Site: SC,
+	}
 	postPage.Meta = PageMeta{
 		Title: p.Title(),
 	}
-	postPage.ContentHTML = p.SafeHTML()
+	postPage.PageHTML = p.SafeHTML()
 	postPage.CreatedDate = p.DateCreated()
 	//postPage.ModifiedDate = p.DateModified()
 

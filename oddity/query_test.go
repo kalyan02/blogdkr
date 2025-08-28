@@ -41,7 +41,7 @@ func TestParseQuery(t *testing.T) {
 			expected: &QueryAST{
 				Type:         QueryPosts,
 				HTMLTemplate: "recent-posts.html",
-				MDFormat:     FormatCompact,
+				MDFormat:     FormatListWithDate,
 				Limit:        10,
 				Order:        SortAsc,
 			},
@@ -203,7 +203,7 @@ func TestQueryString(t *testing.T) {
 		Sort:     SortRecent,
 		Order:    SortDesc,
 		Limit:    5,
-		MDFormat: FormatCompact,
+		MDFormat: FormatListWithDate,
 		Filters: []QueryFilter{
 			{Field: "tag", Operator: "contains", Value: "golang"},
 		},
