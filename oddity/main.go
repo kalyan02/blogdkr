@@ -156,6 +156,19 @@ func main() {
 	}
 	log.Infof("Loaded %d content files in %v", len(siteContent.FileName), time.Since(startT))
 
+	startT = time.Now()
+	wire := NewWire(siteContent)
+	err = wire.ScanForQueries()
+	if err != nil {
+		log.Fatalf("error scanning for queries: %v", err)
+	}
+	log.Infof("Scanned %d query files in %v", len(wire.queries), time.Since(startT))
+
+	err = wire.NotifyFileChanged("_index.md")
+	if err != nil {
+		log.Errorf("error notifying file changed: %v", err)
+	}
+
 	r := gin.Default()
 	r.LoadHTMLGlob("tmpl/*")
 	// auth middleware
