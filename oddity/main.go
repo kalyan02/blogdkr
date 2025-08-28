@@ -1,12 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -40,123 +39,6 @@ var SC = SiteConfig{
 	},
 }
 
-type FileType int
-
-const (
-	FileTypeMarkdown FileType = iota
-	FileTypeHTML
-	FileTypeStatic
-	FileTypeDirectory
-)
-
-type FileDetail struct {
-	FileName      string
-	FileType      FileType
-	LoadedAt      time.Time
-	CreatedAt     time.Time
-	ModifiedAt    time.Time
-	ParsedContent *ParsedContent
-}
-
-type ContentStuff struct {
-	FileName    map[string]FileDetail
-	SlugFileMap map[string]FileDetail
-	Config      Config
-}
-
-func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
-	if fd, ok := c.FileName[p]; ok {
-		return fd, true
-	}
-	if fd, ok := c.SlugFileMap[p]; ok {
-		return fd, true
-	}
-	return FileDetail{}, false
-}
-
-func NewContentStuff(config Config) *ContentStuff {
-	return &ContentStuff{
-		Config:      config,
-		FileName:    make(map[string]FileDetail),
-		SlugFileMap: make(map[string]FileDetail),
-	}
-}
-
-func (c *ContentStuff) LoadContent() error {
-	// recursively load all markdown files from ContentDir
-	// and populate FileName and SlugFileMap
-
-	// traverse the directory c.Config.ContentDir
-	err := filepath.Walk(c.Config.ContentDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		relPath, err := filepath.Rel(c.Config.ContentDir, path)
-		if err != nil {
-			return err
-		}
-
-		var ctime time.Time
-		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			// convert to time.Time
-			ctime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
-		}
-
-		if info.IsDir() {
-			c.FileName[relPath] = FileDetail{
-				FileName:   relPath,
-				FileType:   FileTypeDirectory,
-				LoadedAt:   time.Now(),
-				ModifiedAt: info.ModTime(),
-				CreatedAt:  ctime,
-			}
-		}
-
-		if !info.IsDir() && (filepath.Ext(path) == ".md" || filepath.Ext(path) == ".html") {
-
-			fileContent, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-
-			mdParser := NewMarkdownParser(DefaultParserConfig())
-			pc, err := mdParser.Parse(fileContent)
-			if err != nil {
-				return err
-			}
-
-			fd := FileDetail{
-				FileName:      relPath,
-				ParsedContent: pc,
-				LoadedAt:      time.Now(),
-				ModifiedAt:    info.ModTime(),
-				FileType: func() FileType {
-					if filepath.Ext(path) == ".md" {
-						return FileTypeMarkdown
-					} else {
-						return FileTypeHTML
-					}
-				}(),
-				CreatedAt: ctime,
-			}
-			c.FileName[relPath] = fd
-
-			// crreate at <dir>/<slug>
-			pg := NewPageFromFileDetail(&fd)
-			slugPath := pg.Slug()
-			if slugPath != "" {
-				c.SlugFileMap[slugPath] = fd
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 var siteContent *ContentStuff
 
 func main() {
@@ -169,6 +51,14 @@ func main() {
 	}
 	log.Infof("Loaded %d content files in %v", len(siteContent.FileName), time.Since(startT))
 
+	closeCh, err := siteContent.WatchContentChanges()
+	if err != nil {
+		log.Fatalf("error watching content changes: %v", err)
+	}
+	defer func() {
+		close(closeCh)
+	}()
+
 	startT = time.Now()
 	wire := NewWire(siteContent)
 	err = wire.ScanForQueries()
@@ -177,9 +67,15 @@ func main() {
 	}
 	log.Infof("Scanned %d query files in %v", len(wire.queries), time.Since(startT))
 
-	err = wire.NotifyFileChanged("_index.md")
-	if err != nil {
-		log.Errorf("error notifying file changed: %v", err)
+	// notify all index files
+	for fname := range siteContent.FileName {
+		if strings.HasSuffix(fname, "index.md") || strings.HasSuffix(fname, "index.html") || strings.HasSuffix(fname, "_index.md") {
+			err = wire.NotifyFileChanged(fname)
+			if err != nil {
+				log.Errorf("error notifying file changed: %v", err)
+			}
+			fmt.Println("Index file:", fname)
+		}
 	}
 
 	r := gin.Default()
@@ -188,6 +84,9 @@ func main() {
 	r.Use(AuthMiddleware())
 
 	//r.Handle("GET", "/*path", handleAllContentPages)
+	adminGroup := r.Group("/admin")
+	adminGroup.GET("/edit", handleAdminEditor)
+	adminGroup.Any("/edit-data", handleEditPageData)
 	r.NoRoute(handleAllContentPages)
 
 	r.Run(":8081")
@@ -311,29 +210,8 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 			Title: page.Title(),
 		},
 		PageHTML: page.SafeHTML(),
+		EditURL:  fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
 	}
-
-	//if len(posts) > 0 {
-	//	for _, p := range posts {
-	//		ps := PostSummary{}
-	//		postPage := NewPageFromFileDetail(&p)
-	//		if p.ParsedContent != nil && p.ParsedContent.Frontmatter != nil {
-	//			ps.Title = postPage.Title()
-	//			ps.Date = postPage.DateCreated()
-	//			ps.Tags = postPage.Hashtags()
-	//			ps.Slug = postPage.Slug()
-	//		} else {
-	//			base := filepath.Base(p.FileName)
-	//			ps.Title = strings.TrimSuffix(base, filepath.Ext(base))
-	//		}
-	//
-	//		indexPage.Posts = append(indexPage.Posts, ps)
-	//	}
-	//	// sort posts by date desc
-	//	sort.Slice(indexPage.Posts, func(i, j int) bool {
-	//		return indexPage.Posts[i].Date.After(indexPage.Posts[j].Date)
-	//	})
-	//}
 
 	c.HTML(200, "post.html", indexPage)
 	fmt.Println(c.Errors)
@@ -343,7 +221,8 @@ func renderPage(c *gin.Context, file FileDetail) {
 	// load the file content and render it
 	p := NewPageFromFileDetail(&file)
 	postPage := PostPage{
-		Site: SC,
+		Site:    SC,
+		EditURL: fmt.Sprintf("/admin/edit?path=%s", p.Slug()),
 	}
 	postPage.Meta = PageMeta{
 		Title: p.Title(),
@@ -353,6 +232,74 @@ func renderPage(c *gin.Context, file FileDetail) {
 	//postPage.ModifiedDate = p.DateModified()
 
 	c.HTML(200, "post.html", postPage)
+}
 
-	//c.String(200, "Rendering page: %s", string(file.ParsedContent.HTML))
+type editPageData struct {
+	FullSlug    string `json:"fullSlug"`
+	Frontmatter string `json:"frontmatter"`
+	Content     string `json:"content"`
+	CurrentFile string `json:"currentFile"`
+}
+
+func (e editPageData) JSONString() string {
+	jsonBytes, err := json.MarshalIndent(e, "", "  ")
+	if err != nil {
+		log.Errorf("error marshalling editPageData to JSON: %v", err)
+		return "{}"
+	}
+	return string(jsonBytes)
+}
+
+func handleEditPageData(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(400, gin.H{"error": "path query param is required"})
+		return
+	}
+
+	if c.Request.Method == "GET" {
+		// if path exists return its content
+		data, err := buildEditPageDataResponse(path)
+		if err != nil {
+			c.JSON(404, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, data)
+		return
+	}
+}
+
+func buildEditPageDataResponse(path string) (editPageData, error) {
+	file, ok := siteContent.DoPath(path)
+	if !ok {
+		return editPageData{}, fmt.Errorf("file not found")
+	}
+	if file.FileType != FileTypeMarkdown && file.FileType != FileTypeHTML {
+		return editPageData{}, fmt.Errorf("not editable file type")
+	}
+	pg := NewPageFromFileDetail(&file)
+	data := editPageData{
+		FullSlug:    pg.Slug(),
+		Frontmatter: file.ParsedContent.Frontmatter.Raw,
+		Content:     string(pg.BodyWithTitle()),
+		CurrentFile: file.FileName,
+	}
+	return data, nil
+}
+
+func handleAdminEditor(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		c.String(400, "path query param is required")
+		return
+	}
+
+	data, err := buildEditPageDataResponse(path)
+	if err != nil {
+		log.Errorf("error building edit page data response: %v", err)
+	}
+
+	c.HTML(200, "edit.html", gin.H{
+		"Data": data.JSONString(),
+	})
 }

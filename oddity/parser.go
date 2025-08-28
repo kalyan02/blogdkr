@@ -86,9 +86,37 @@ type ParsedContent struct {
 	WikiLinks   []string
 	Shortcodes  []ShortcodeData
 	Headings    []HeadingData
+	Title       string
 
 	mdparser *MarkdownParser
 	HTML     []byte
+}
+
+func (pc *ParsedContent) Marshal() (string, error) {
+	// marshal frontmatter first
+	parts := make([]string, 0, 3)
+	fmStr, err := pc.Frontmatter.Marshal()
+	if err != nil {
+		return "", err
+	}
+	if fmStr != "" {
+		parts = append(parts, fmStr)
+	}
+	// add headings if any
+	if pc.Title != "" {
+		parts = append(parts, fmt.Sprintf("# %s\n", pc.Title))
+	} else if len(pc.Headings) > 0 {
+		// get first h1
+		for _, h := range pc.Headings {
+			if h.Level == 1 {
+				parts = append(parts, fmt.Sprintf("# %s\n", h.Text))
+				break
+			}
+		}
+	}
+	// add body
+	parts = append(parts, string(pc.Body))
+	return strings.Join(parts, "\n"), nil
 }
 
 // ShortcodeData represents a parsed shortcode
@@ -195,7 +223,24 @@ func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 		}
 	}
 
+	// Strip first H1 from content
 	result.Headings = mp.ExtractHeadings(bodyContent)
+	bodyContent, h1Removed := RemoveFirstH1(bodyContent, 5)
+
+	if h1Removed {
+		for _, h := range result.Headings {
+			if h.Level == 1 {
+				result.Title = h.Text
+				break
+			}
+		}
+	}
+	// Set title from frontmatter or first H1
+	if result.Title == "" && result.Frontmatter != nil {
+		if title, ok := result.Frontmatter.Data["title"].(string); ok && title != "" {
+			result.Title = title
+		}
+	}
 
 	result.Body = bodyContent
 	result.HTML = markdown.ToHTML(bodyContent, mp.parser, mp.renderer)
@@ -228,6 +273,30 @@ func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 	}
 
 	return result, nil
+}
+
+func RemoveFirstH1(markdown []byte, linesToSearch int) ([]byte, bool) {
+	lines := strings.Split(string(markdown), "\n")
+	result := make([]string, 0, len(lines))
+	h1Removed := false
+
+	for i, line := range lines {
+		if linesToSearch > 0 && i < linesToSearch {
+			// Check for ATX-style heading (# Title)
+			if !h1Removed && regexp.MustCompile(`^#\s`).MatchString(line) {
+				h1Removed = true
+				// Skip this line and any immediately following empty lines
+				for i+1 < len(lines) && strings.TrimSpace(lines[i+1]) == "" {
+					i++
+				}
+				continue
+			}
+		}
+
+		result = append(result, line)
+	}
+
+	return []byte(strings.Join(result, "\n")), h1Removed
 }
 
 // ExtractFrontmatter extracts and parses frontmatter from content
@@ -742,6 +811,30 @@ func (fm *FrontmatterData) HasKey(key string) bool {
 	}
 	_, exists := fm.Data[key]
 	return exists
+}
+
+// Marshal the frontmatter data to string
+func (fm *FrontmatterData) Marshal() (string, error) {
+	if fm == nil {
+		return "", nil
+	}
+	switch fm.Type {
+	case FrontmatterYAML:
+		out, err := yaml.Marshal(fm.Data)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("---\n%s---\n", string(out)), nil
+	case FrontmatterTOML:
+		var buf bytes.Buffer
+		encoder := toml.NewEncoder(&buf)
+		if err := encoder.Encode(fm.Data); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("+++\n%s+++\n", buf.String()), nil
+	default:
+		return "", nil
+	}
 }
 
 // renderHtml updates a Page with parsed HTML content

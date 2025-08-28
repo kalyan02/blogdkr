@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/overtype/dist/overtype.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -66,7 +67,7 @@
         <!-- Title Bar -->
         <div class="py-4">
             <div :class="'mx-auto px-4 ' + editorWidthOptions[editorWidth].containerClass">
-                <span class="text-sm text-gray-700">Editing: [[ currentFile ]]</span>
+                <span class="text-lm text-gray-700">Editing: [[ currentFile ]]</span>
             </div>
         </div>
 
@@ -74,13 +75,17 @@
         <div :class="'mx-auto px-4 flex flex-col gap-6 ' + editorWidthOptions[editorWidth].containerClass + (!sidebarBelow ? ' lg:flex-row' : ' lg:flex-col')">
             <!-- Editor Area -->
             <div class="flex-1">
-                <textarea 
-                    v-model="content"
-                    @input="autoResize"
-                    ref="editor"
-                    class="w-full min-h-[600px] border-none p-0 text-sm lg:text-sm text-base leading-relaxed resize-none outline-none bg-transparent font-mono"
-                    :placeholder="editorPlaceholder">
-                </textarea>
+                <div id="richeditor" class="w-full richeditor"></div>
+{{/*                <textarea*/}}
+{{/*                    id="editorbox"*/}}
+{{/*                    v-model="content"*/}}
+{{/*                    @input="autoResize"*/}}
+{{/*                    ref="editor"*/}}
+{{/*                    class="w-full min-h-[600px] border-none p-0 text-sm lg:text-sm text-base leading-relaxed resize-none outline-none bg-transparent editorboxreal text-gray-800"*/}}
+{{/*                    :placeholder="editorPlaceholder">*/}}
+{{/*                </textarea>*/}}
+{{/*                <textarea class="editorboxreal" style="display:none;"></textarea>*/}}
+
             </div>
 
             <!-- Sidebar -->
@@ -202,15 +207,50 @@
     </div>
 
     <script>
+
+        function tryJSON(input, defaultObj) {
+            if (input === "") {
+                return defaultObj
+            }
+            try {
+                return JSON.parse(input)
+            } catch (e) {
+                console.log("Error parsing json", e)
+                return defaultObj
+            }
+        }
+
+
+        var defaultLoadedData = tryJSON("{{.Data}}", {});
+
+
+        // document on load
+        document.addEventListener("DOMContentLoaded", function() {
+            // Create a single editor
+            const OT = window.OverType.default || window.OverType;
+            if(document.getElementsByClassName("richeditor").length > 0) {
+                // document.getElementsByClassName("editorboxreal")[0].style.display = 'none';
+                const editor = new OT(".richeditor", {
+                    value: defaultLoadedData.content || '',
+                    theme: "light",
+                    autoResize: true,
+                    fontSize: '14px',
+                })
+            }
+        });
+
+
+
+
         const { createApp } = Vue
         
-        createApp({
+        var app = createApp({
             delimiters: ['[[', ']]'],
             data() {
                 return {
-                    content: '',
-                    frontmatter: 'title: My Post\ntags: [blog, markdown]\ndate: 2024-01-01\npublic: true',
-                    currentFile: 'untitled.md',
+                    content: defaultLoadedData.content || '',
+                    frontmatter: defaultLoadedData.frontmatter || '',
+                    currentFile: defaultLoadedData.currentFile || 'untitled.md',
                     distractionFree: false,
                     sidebarVisible: true,
                     isDragOver: false,
@@ -224,14 +264,14 @@
                         search: true
                     },
                     navLinks: [
-                        { name: 'Dashboard', href: '/admin' },
-                        { name: 'Files', href: '/admin/files' },
+                        { name: 'Home', href: '/' },
+                        // { name: 'Files', href: '/admin/files' },
                     ],
                     navigationItems: [
-                        { name: 'Dashboard', href: '/admin', emoji: '📊' },
-                        { name: 'All Posts', href: '/admin/posts', emoji: '📝' },
-                        { name: 'Pages', href: '/admin/pages', emoji: '📄' },
-                        { name: 'Files', href: '/admin/files', emoji: '🗂️' },
+                        // { name: 'Dashboard', href: '/admin', emoji: '📊' },
+                        // { name: 'All Posts', href: '/admin/posts', emoji: '📝' },
+                        // { name: 'Pages', href: '/admin/pages', emoji: '📄' },
+                        // { name: 'Files', href: '/admin/files', emoji: '🗂️' },
                         { name: 'Preview', href: '/preview/untitled', target: '_blank', emoji: '👁️', primary: true }
                     ],
                     files: [
@@ -315,8 +355,10 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     this.saveSectionStates();
                 },
                 autoResize(event) {
+                    console.log("Auto resizing editor")
                     const textarea = event.target
                     textarea.style.height = 'auto'
+                    console.log("Scroll height:", textarea.scrollHeight)
                     textarea.style.height = Math.max(600, textarea.scrollHeight) + 'px'
                 },
                 triggerFileInput() {
@@ -474,13 +516,23 @@ Start writing your content here. The editor is now centered with a fixed maximum
             },
             mounted() {
                 this.loadSavedStates()
+                if (this.$refs.editor) {
+                    this.autoResize({ target: this.$refs.editor })
+                }
                 this.$nextTick(() => {
+                    console.log("Mounted, resizing editor")
                     if (this.$refs.editor) {
                         this.autoResize({ target: this.$refs.editor })
                     }
                 })
             },
         }).mount('#app')
+
+        setTimeout(() => {
+            if (app.$refs.editor) {
+                app.autoResize({ target: app.$refs.editor })
+            }
+        }, 500);
     </script>
 </body>
 </html>

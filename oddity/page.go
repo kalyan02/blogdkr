@@ -26,15 +26,8 @@ func NewPageFromFileDetail(f *FileDetail) *Page {
 func (p *Page) Title() string {
 	firstL1 := ""
 
-	mdParser := NewMarkdownParser(DefaultParserConfig())
-	headings := mdParser.ExtractHeadings(p.File.ParsedContent.Body)
-	if len(headings) > 0 {
-		for _, h := range headings {
-			if h.Level == 1 {
-				firstL1 = h.Text
-				break
-			}
-		}
+	if len(p.File.ParsedContent.Title) > 0 {
+		firstL1 = p.File.ParsedContent.Title
 	}
 
 	// check front matter title
@@ -57,13 +50,19 @@ var titleRegexp = regexp.MustCompile("(?m)^#\\s*(.*)\n+")
 
 func (p *Page) Body(noTitle bool) []byte {
 	s := string(p.File.ParsedContent.Body)
-	m := titleRegexp.FindStringSubmatch(s)
-	if m != nil {
-		if noTitle {
+	if noTitle {
+		m := titleRegexp.FindStringSubmatch(s)
+		if m != nil {
 			return []byte(strings.Replace(s, m[0], "", 1))
 		}
 	}
-	return nil
+	return []byte(s)
+}
+
+func (p *Page) BodyWithTitle() []byte {
+	body := []byte(`# ` + p.Title() + "\n\n")
+	body = append(body, p.Body(false)...)
+	return body
 }
 
 func (p *Page) BodyNoTitle() []byte {
