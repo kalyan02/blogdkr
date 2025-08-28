@@ -31,7 +31,7 @@
                     <a v-for="link in navLinks" :key="link.name" :href="link.href" :target="link.target"  v-if="!distractionFree"
                        class="text-gray-600 text-xs px-1 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors"
                        :class="{ 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white': link.primary }">
-                        {{ link.name }}
+                        [[ link.name ]]
                     </a>
                 </div>
 
@@ -39,21 +39,21 @@
                 <div class="flex gap-1 justify-center">
                     <button @click="toggleSidebar"
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
-                        {{ sidebarVisible ? '✕' : '≡' }}
+                        [[ sidebarVisible ? '✕' : '≡' ]]
                     </button>
                     <button @click="toggleSidebarPosition"
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all"
                             title="Move sidebar below content">
-                        {{ sidebarBelow ? '↑' : '↓' }}
+                        [[ sidebarBelow ? '↑' : '↓' ]]
                     </button>
                     <button @click="cycleEditorWidth"
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all"
                             :title="'Editor width: ' + editorWidthOptions[editorWidth].label">
-                        {{ editorWidthOptions[editorWidth].icon }}
+                        [[ editorWidthOptions[editorWidth].icon ]]
                     </button>
                     <button @click="toggleDistractionFree"
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
-                        {{ distractionFree ? '◑' : '◐' }}
+                        [[ distractionFree ? '◑' : '◐' ]]
                     </button>
                     <button @click="saveContent"
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-green-600 hover:text-white hover:bg-green-600 transition-all">
@@ -66,7 +66,7 @@
         <!-- Title Bar -->
         <div class="py-4">
             <div :class="'mx-auto px-4 ' + editorWidthOptions[editorWidth].containerClass">
-                <span class="text-sm text-gray-700">Editing: {{ currentFile }}</span>
+                <span class="text-sm text-gray-700">Editing: [[ currentFile ]]</span>
             </div>
         </div>
 
@@ -102,7 +102,7 @@
                         <a v-for="navItem in navigationItems" :key="navItem.name" :href="navItem.href" :target="navItem.target"
                            class="block text-gray-600 text-xs px-2 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors no-underline"
                            :class="{ 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white': navItem.primary }">
-                            {{ navItem.emoji }} {{ navItem.name }}
+                            [[ navItem.emoji ]] [[ navItem.name ]]
                         </a>
                     </div>
                 </div>
@@ -144,9 +144,9 @@
                                 <div class="flex items-center justify-between p-1 hover:bg-gray-50 rounded">
                                     <span @click="insertFileLink(file)" class="text-xs cursor-pointer flex-1 text-gray-700 hover:text-gray-900">
                                         <span class="font-semibold" :class="{ 'text-blue-600': file.type === 'image', 'text-gray-600': file.type === 'file' }">
-                                            {{ file.type === 'image' ? '[IMG]' : '[FILE]' }}
+                                            [[ file.type === 'image' ? '[IMG]' : '[FILE]' ]]
                                         </span>
-                                        {{ file.name }}
+                                        [[ file.name ]]
                                     </span>
                                     <button @click="toggleFileMenu(file.id)" 
                                             class="text-xs text-gray-400 hover:text-gray-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -159,7 +159,7 @@
                                     <div @click="renameFile(file)" class="text-xs p-2 cursor-pointer hover:bg-gray-100 border-b border-gray-100">Rename</div>
                                     <div @click="deleteFile(file.id)" class="text-xs p-2 cursor-pointer hover:bg-gray-100 text-red-600" :class="{ 'border-b border-gray-100': file.type === 'image' }">Delete</div>
                                     <div v-if="file.type === 'image'" @click="toggleImageResize(file.id)" class="text-xs p-2 cursor-pointer hover:bg-gray-100">
-                                        {{ file.resizeOpen ? 'Hide Resize' : 'Resize' }}
+                                        [[ file.resizeOpen ? 'Hide Resize' : 'Resize' ]]
                                     </div>
                                 </div>
 
@@ -191,7 +191,7 @@
                             <div v-for="result in filteredSearchResults" :key="result.id" @click="insertPageLink(result)"
                                  class="text-xs p-1 cursor-pointer hover:bg-gray-50 rounded text-gray-700 hover:text-gray-900">
                                 <span class="font-semibold text-green-600">[PAGE]</span>
-                                {{ result.title }}
+                                [[ result.title ]]
                             </div>
                         </div>
                     </div>
@@ -205,6 +205,7 @@
         const { createApp } = Vue
         
         createApp({
+            delimiters: ['[[', ']]'],
             data() {
                 return {
                     content: '',
