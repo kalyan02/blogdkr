@@ -16,6 +16,15 @@
                 extend: {
                     fontFamily: {
                         'mono': ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'pulse-once': 'pulse-once 1.5s ease-in-out'
+                    },
+                    keyframes: {
+                        'pulse-once': {
+                            '0%, 100%': { opacity: '0.5' },
+                            '50%': { opacity: '1' }
+                        }
                     }
                 }
             }
@@ -68,6 +77,7 @@
         <div class="py-4">
             <div :class="'mx-auto px-4 ' + editorWidthOptions[editorWidth].containerClass">
                 <span class="text-lm text-gray-700">Editing: [[ currentFile ]]</span>
+                <span v-if="lastSaved" :key="lastSaved" class="text-xs text-gray-500 ml-4 animate-pulse-once">Last saved: [[ lastSaved ]]</span>
             </div>
         </div>
 
@@ -235,6 +245,9 @@
                     theme: "light",
                     autoResize: true,
                     fontSize: '14px',
+                    onChange: (value) => {
+                        app.content = value;
+                    }
                 })
             }
         });
@@ -251,6 +264,7 @@
                     content: defaultLoadedData.content || '',
                     frontmatter: defaultLoadedData.frontmatter || '',
                     currentFile: defaultLoadedData.currentFile || 'untitled.md',
+                    lastSaved: null,
                     distractionFree: false,
                     sidebarVisible: true,
                     isDragOver: false,
@@ -346,9 +360,38 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     this.editorWidth = widthKeys[nextIndex]
                     this.saveEditorWidthState()
                 },
-                saveContent() {
-                    console.log('Saving:', { content: this.content, frontmatter: this.frontmatter })
-                    alert('Content saved successfully!')
+                async saveContent() {
+                    try {
+                        const response = await fetch('/admin/edit-data?action=save', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                fullSlug: defaultLoadedData.fullSlug,
+                                content: this.content,
+                                frontmatter: this.frontmatter,
+                                currentFile: this.currentFile
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const updatedData = await response.json();
+                        
+                        this.content = updatedData.content || this.content;
+                        this.frontmatter = updatedData.frontmatter || this.frontmatter;
+                        this.currentFile = updatedData.currentFile || this.currentFile;
+                        this.lastSaved = new Date().toLocaleTimeString();
+                        
+                        console.log('Content saved successfully!');
+                        // alert('Content saved successfully!');
+                    } catch (error) {
+                        console.error('Error saving content:', error);
+                        alert('Error saving content: ' + error.message);
+                    }
                 },
                 toggleSection(section) {
                     this.sections[section] = !this.sections[section]

@@ -51,13 +51,13 @@ func main() {
 	}
 	log.Infof("Loaded %d content files in %v", len(siteContent.FileName), time.Since(startT))
 
-	closeCh, err := siteContent.WatchContentChanges()
-	if err != nil {
-		log.Fatalf("error watching content changes: %v", err)
-	}
-	defer func() {
-		close(closeCh)
-	}()
+	//closeCh, err := siteContent.WatchContentChanges()
+	//if err != nil {
+	//	log.Fatalf("error watching content changes: %v", err)
+	//}
+	//defer func() {
+	//	close(closeCh)
+	//}()
 
 	startT = time.Now()
 	wire := NewWire(siteContent)
@@ -251,13 +251,60 @@ func (e editPageData) JSONString() string {
 }
 
 func handleEditPageData(c *gin.Context) {
-	path := c.Query("path")
-	if path == "" {
-		c.JSON(400, gin.H{"error": "path query param is required"})
+	if c.Request.Method == "POST" {
+		var reqData editPageData
+		if err := c.BindJSON(&reqData); err != nil {
+			c.JSON(400, gin.H{"error": "invalid JSON body"})
+			return
+		}
+		fmt.Println("Received edit data :", reqData)
+
+		if reqData.CurrentFile == "" && reqData.FullSlug == "" {
+			c.JSON(400, gin.H{"error": "either currentFile or fullSlug is required"})
+			return
+		}
+
+		targetFile := reqData.CurrentFile
+		file := siteContent.FileName[targetFile]
+		fm := file.ParsedContent.Frontmatter
+
+		parser := NewMarkdownParser(DefaultParserConfig())
+		editedFile, err := parser.Parse([]byte(reqData.Content))
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("error parsing content: %v", err)})
+			return
+		}
+
+		editedFile.Frontmatter = fm
+		file.ParsedContent = editedFile
+
+		err = SaveFileDetail(&siteContent.Config, &file)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("error saving file: %v", err)})
+			return
+		}
+		err = siteContent.RefreshContent(file.FileName)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("error refreshing content: %v", err)})
+			return
+		}
+
+		data, err := buildEditPageDataResponse(file.FileName)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("error building response: %v", err)})
+			return
+		}
+		c.JSON(200, data)
 		return
 	}
 
 	if c.Request.Method == "GET" {
+		path := c.Query("path")
+		if path == "" {
+			c.JSON(400, gin.H{"error": "path query param is required"})
+			return
+		}
+
 		// if path exists return its content
 		data, err := buildEditPageDataResponse(path)
 		if err != nil {

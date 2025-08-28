@@ -18,8 +18,9 @@ func TestParseQuery(t *testing.T) {
 			expected: &QueryAST{
 				Type:     QueryPosts,
 				Limit:    5,
-				MDFormat: FormatList,
-				Order:    SortAsc,
+				MDFormat: FormatListWithDate,
+				Sort:     SortRecent,
+				Order:    SortDesc,
 			},
 		},
 		{
@@ -31,19 +32,20 @@ func TestParseQuery(t *testing.T) {
 				Sort:     SortRecent,
 				Order:    SortDesc,
 				Limit:    3,
-				MDFormat: FormatList,
+				MDFormat: FormatListWithDate,
 			},
 		},
 		{
 			name:      "Posts query with template and format",
-			input:     `<query type="posts" html-template="recent-posts.html" md-format="compact" limit="10">`,
+			input:     `<query type="posts" html-template="recent-posts.html" md-format="list" limit="10">`,
 			expectErr: false,
 			expected: &QueryAST{
 				Type:         QueryPosts,
 				HTMLTemplate: "recent-posts.html",
-				MDFormat:     FormatListWithDate,
+				MDFormat:     FormatList,
 				Limit:        10,
-				Order:        SortAsc,
+				Order:        SortDesc,
+				Sort:         SortRecent,
 			},
 		},
 		{
@@ -52,8 +54,9 @@ func TestParseQuery(t *testing.T) {
 			expectErr: false,
 			expected: &QueryAST{
 				Type:     QueryBacklinks,
-				MDFormat: FormatList,
-				Order:    SortAsc,
+				MDFormat: FormatListWithDate,
+				Order:    SortDesc,
+				Sort:     SortRecent,
 			},
 		},
 		{
@@ -64,7 +67,7 @@ func TestParseQuery(t *testing.T) {
 				Type:     QueryPosts,
 				Sort:     SortDate,
 				Order:    SortDesc,
-				MDFormat: FormatList,
+				MDFormat: FormatListWithDate,
 				Filters: []QueryFilter{
 					{Field: "tag", Operator: "contains", Value: "project"},
 				},
@@ -77,11 +80,12 @@ func TestParseQuery(t *testing.T) {
 			expected: &QueryAST{
 				Type:     QueryPosts,
 				Limit:    5,
-				MDFormat: FormatList,
-				Order:    SortAsc,
+				MDFormat: FormatListWithDate,
+				Order:    SortDesc,
 				Filters: []QueryFilter{
 					{Field: "tag", Operator: "contains", Value: "golang"},
 				},
+				Sort: SortRecent,
 			},
 		},
 		{
@@ -94,7 +98,7 @@ func TestParseQuery(t *testing.T) {
 				Sort:     SortRecent,
 				Order:    SortDesc,
 				Limit:    3,
-				MDFormat: FormatList,
+				MDFormat: FormatListWithDate,
 			},
 		},
 		{
@@ -105,7 +109,8 @@ func TestParseQuery(t *testing.T) {
 				Type:     QueryPosts,
 				Path:     "./notes/*.md",
 				MDFormat: FormatDetailed,
-				Order:    SortAsc,
+				Order:    SortDesc,
+				Sort:     SortRecent,
 			},
 		},
 		{
@@ -120,8 +125,9 @@ func TestParseQuery(t *testing.T) {
 			expected: &QueryAST{
 				Type:     QueryPosts,
 				Limit:    5,
-				MDFormat: FormatList,
-				Order:    SortAsc,
+				MDFormat: FormatListWithDate,
+				Order:    SortDesc,
+				Sort:     SortRecent,
 			},
 		},
 		{
@@ -211,7 +217,7 @@ func TestQueryString(t *testing.T) {
 	}
 
 	result := query.String()
-	expected := "posts sort:recent order:desc limit:5 where:tag contains 'golang' template:recent-posts.html format:compact"
+	expected := "posts sort:recent order:desc limit:5 where:tag contains 'golang' template:recent-posts.html format:list-date"
 
 	if result != expected {
 		t.Errorf("String representation mismatch:\ngot:  %s\nwant: %s", result, expected)

@@ -88,11 +88,10 @@ type ParsedContent struct {
 	Headings    []HeadingData
 	Title       string
 
-	mdparser *MarkdownParser
-	HTML     []byte
+	HTML []byte
 }
 
-func (pc *ParsedContent) Marshal() (string, error) {
+func (pc *ParsedContent) ToMarkdown() (string, error) {
 	// marshal frontmatter first
 	parts := make([]string, 0, 3)
 	fmStr, err := pc.Frontmatter.Marshal()
@@ -211,7 +210,6 @@ func (mp *MarkdownParser) initializeRenderer() {
 // Parse parses the complete markdown content including frontmatter
 func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 	result := &ParsedContent{}
-	result.mdparser = mp
 
 	// Extract frontmatter if enabled
 	bodyContent := content

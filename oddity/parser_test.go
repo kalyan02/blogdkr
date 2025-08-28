@@ -56,8 +56,13 @@ This is a test post with **YAML** frontmatter.
 	if len(bodyStr) == 0 {
 		t.Fatal("Expected body content")
 	}
-	if bodyStr[0:2] != "# " {
-		t.Errorf("Expected body to start with '# ', got '%s'", bodyStr[0:10])
+
+	if result.Title != "Hello World" {
+		t.Errorf("Expected title to be 'Test Post', got '%s'", result.Title)
+	}
+
+	if !strings.Contains(bodyStr, "This is a test post with **YAML** frontmatter.") {
+		t.Error("Body content does not match expected content")
 	}
 
 	// Test hashtags extraction
@@ -146,9 +151,17 @@ Just regular **markdown** content with #hashtags.`)
 		t.Error("Expected no frontmatter")
 	}
 
-	// Body should be the same as original content
-	if string(result.Body) != string(content) {
-		t.Error("Body should match original content when no frontmatter")
+	if result.Title != "Regular Post" {
+		t.Errorf("Expected title 'Regular Post', got '%s'", result.Title)
+	}
+
+	bodyStr := string(result.Body)
+	if !strings.Contains(bodyStr, "This post has no frontmatter.") {
+		t.Error("Body content does not match expected content")
+	}
+
+	if strings.Contains(bodyStr, "Regular Post") {
+		t.Error("Body should not contain the title")
 	}
 
 	// Should still extract hashtags
@@ -185,43 +198,9 @@ Final paragraph.`)
 	}
 
 	// Should contain text without markdown formatting
-	expected := "Main Title This is a bold and italic text with links . List item 1 List item 2 Quote block Final paragraph."
+	expected := "This is a bold and italic text with links . List item 1 List item 2 Quote block Final paragraph."
 	if plainText != expected {
 		t.Errorf("Expected plain text '%s', got '%s'", expected, plainText)
-	}
-}
-
-func TestLegacyCompatibility(t *testing.T) {
-	// Test that the legacy Page methods still work
-	page := &Page{
-		Body: []byte(`---
-title: Legacy Test
----
-
-# Legacy Page
-
-Content with #legacy hashtag.`),
-	}
-
-	// Test renderHtml
-	page.renderHtml()
-	if len(page.HTML) == 0 {
-		t.Error("Expected HTML content from renderHtml")
-	}
-	if len(page.Hashtags) != 1 || page.Hashtags[0] != "legacy" {
-		t.Errorf("Expected hashtags [legacy], got %v", page.Hashtags)
-	}
-
-	// Test plainText
-	plainText := page.plainText()
-	if len(plainText) == 0 {
-		t.Error("Expected plain text from plainText method")
-	}
-
-	// Test images (should return empty for this content)
-	images := page.images()
-	if len(images) != 0 {
-		t.Errorf("Expected no images, got %d", len(images))
 	}
 }
 

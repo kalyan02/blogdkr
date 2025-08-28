@@ -99,6 +99,11 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 	return done, nil
 }
 
+func (c *ContentStuff) RefreshContent(path string) error {
+	path = filepath.Join(c.Config.ContentDir, path)
+	return c.scanContentPath(path, nil, nil)
+}
+
 func (c *ContentStuff) scanContentPath(path string, info fs.FileInfo, err error) error {
 	if err != nil {
 		return err
@@ -194,4 +199,28 @@ type FileDetail struct {
 	CreatedAt     time.Time
 	ModifiedAt    time.Time
 	ParsedContent *ParsedContent
+}
+
+func SaveFileDetail(cfg *Config, fd *FileDetail) error {
+	if fd.FileType == FileTypeMarkdown {
+		content, err := fd.ParsedContent.ToMarkdown()
+		if err != nil {
+			return fmt.Errorf("error converting to markdown: %v", err)
+		}
+
+		err = os.WriteFile(filepath.Join(cfg.ContentDir, fd.FileName), []byte(content), 0644)
+		if err != nil {
+			return fmt.Errorf("error writing file: %v", err)
+		}
+	}
+
+	if fd.FileType == FileTypeHTML {
+		// just write body
+		err := os.WriteFile(filepath.Join(cfg.ContentDir, fd.FileName), []byte(fd.ParsedContent.HTML), 0644)
+		if err != nil {
+			return fmt.Errorf("error writing file: %v", err)
+		}
+	}
+
+	return nil
 }

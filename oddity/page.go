@@ -60,7 +60,7 @@ func (p *Page) Body(noTitle bool) []byte {
 }
 
 func (p *Page) BodyWithTitle() []byte {
-	body := []byte(`# ` + p.Title() + "\n\n")
+	body := []byte(`# ` + p.Title() + "\n")
 	body = append(body, p.Body(false)...)
 	return body
 }
@@ -92,7 +92,8 @@ func (p *Page) Slug() string {
 		}
 	}
 	if pgslug == "" {
-		pgslug = strings.TrimSuffix(filepath.Base(p.File.FileName), filepath.Ext(p.File.FileName))
+		pgslug = strings.TrimSuffix(p.File.FileName, filepath.Ext(p.File.FileName))
+		pgslug = filepath.Join(filepath.Dir(p.File.FileName), pgslug)
 	}
 	return pgslug
 }
