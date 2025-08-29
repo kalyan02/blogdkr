@@ -1,4 +1,4 @@
-package main
+package contentstuff
 
 import (
 	"bytes"
@@ -731,16 +731,25 @@ func extractNodeText(node ast.Node) string {
 // Helper methods for FrontmatterData
 
 // GetString safely gets a string value from frontmatter data
-func (fm *FrontmatterData) GetString(key string) string {
+func (fm *FrontmatterData) GetString(key string) (string, bool) {
 	if fm == nil || fm.Data == nil {
-		return ""
+		return "", false
 	}
 	if val, ok := fm.Data[key]; ok {
 		if str, ok := val.(string); ok {
-			return str
+			return str, true
 		}
 	}
-	return ""
+	return "", false
+}
+
+// GetValue safely gets a value of any type from frontmatter data
+func (fm *FrontmatterData) GetValue(key string) (any, bool) {
+	if fm == nil || fm.Data == nil {
+		return nil, false
+	}
+	val, ok := fm.Data[key]
+	return val, ok
 }
 
 // GetStringSlice safely gets a string slice from frontmatter data

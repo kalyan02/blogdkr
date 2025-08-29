@@ -1,4 +1,4 @@
-package main
+package contentstuff
 
 import (
 	"fmt"
@@ -151,7 +151,8 @@ func (qr *QueryRenderer) executeQueryForSection(section *QuerySection) error {
 func (qr *QueryRenderer) executePostsQueryForSection(section *QuerySection) error {
 	// Get all posts (non-index markdown files)
 	var posts []FileDetail
-	for _, file := range qr.content.FileName {
+	var allFiles = qr.content.AllFiles()
+	for _, file := range allFiles {
 		if (file.FileType == FileTypeMarkdown || file.FileType == FileTypeHTML) &&
 			!strings.HasSuffix(file.FileName, "index.md") {
 			posts = append(posts, file)

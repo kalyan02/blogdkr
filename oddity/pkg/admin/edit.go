@@ -1,7 +1,8 @@
-package main
+package admin
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html"
 	"path/filepath"
@@ -10,18 +11,25 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+
+	"oddity/pkg/contentstuff"
 )
 
 type editPageData struct {
-	FullSlug    string     `json:"fullSlug"`
-	Frontmatter string     `json:"frontmatter"`
-	Content     string     `json:"content"`
-	CurrentFile string     `json:"currentFile"`
-	BreadCrumbs []LinkData `json:"breadCrumbs"`
+	FullSlug    string                  `json:"fullSlug"`
+	Frontmatter string                  `json:"frontmatter"`
+	Content     string                  `json:"content"`
+	CurrentFile string                  `json:"currentFile"`
+	BreadCrumbs []contentstuff.LinkData `json:"breadCrumbs"`
 }
 
-func handleEditPageData(c *gin.Context) {
+type AdminApp struct {
+	WireController *contentstuff.Wire
+	SiteContent    *contentstuff.ContentStuff
+}
+
+func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 	if c.Request.Method == "POST" {
 		var reqData editPageData
 		if err := c.BindJSON(&reqData); err != nil {
@@ -42,16 +50,16 @@ func handleEditPageData(c *gin.Context) {
 		reqData.FullSlug = strings.Trim(reqData.FullSlug, "/")
 
 		targetFile := reqData.CurrentFile
-		file := siteContent.FileName[targetFile]
+		file := s.SiteContent.FileName[targetFile]
 
-		parser := NewMarkdownParser(DefaultParserConfig())
+		parser := contentstuff.NewMarkdownParser(contentstuff.DefaultParserConfig())
 		editedFile, err := parser.Parse([]byte(reqData.Content))
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("error parsing content: %v", err)})
 			return
 		}
 
-		var fm *FrontmatterData
+		var fm *contentstuff.FrontmatterData
 		if file.ParsedContent == nil || file.ParsedContent.Frontmatter == nil {
 			fm, _, err = parser.ExtractFrontmatter([]byte("---\n" + reqData.Frontmatter + "\n---\n"))
 			if err != nil {
@@ -87,7 +95,7 @@ func handleEditPageData(c *gin.Context) {
 			originalSlug := slug
 			i := 1
 			for {
-				if _, exists := siteContent.SlugFileMap[slug]; !exists {
+				if _, exists := s.SiteContent.SlugFileMap[slug]; !exists {
 					break
 				}
 				slug = fmt.Sprintf("%s-%d", originalSlug, i)
@@ -96,7 +104,7 @@ func handleEditPageData(c *gin.Context) {
 			file.FileName = slug + ".md"
 		}
 
-		err = SaveFileDetail(&siteContent.Config, &file)
+		err = contentstuff.SaveFileDetail(s.SiteContent, s.WireController, &file)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("error saving file: %v", err)})
 			return
@@ -124,7 +132,7 @@ func handleEditPageData(c *gin.Context) {
 		//	}
 		//}
 
-		data, err := buildEditPageDataResponse(file.FileName)
+		data, err := s.buildEditPageDataResponse(file.FileName)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("error building response: %v", err)})
 			return
@@ -137,7 +145,7 @@ func handleEditPageData(c *gin.Context) {
 		path := c.Query("path")
 		action := c.Query("action")
 		if path != "" && action == "history" {
-			histFiles := siteContent.GetHistory(path)
+			histFiles := s.SiteContent.GetHistory(path)
 
 			type histReponse struct {
 				Title        string `json:"title"`
@@ -147,19 +155,19 @@ func handleEditPageData(c *gin.Context) {
 				DiffHTML     string `json:"diffHTML,omitempty"`
 				DeltaSummary string `json:"deltaSummary,omitempty"` // e.g. +10/-2
 			}
-			var histResponses []histReponse
+			var fullHistory []histReponse
 
 			for i, hf := range histFiles {
 				if i >= 20 {
 					break
 				}
-				mdParser := NewMarkdownParser(DefaultParserConfig())
+				mdParser := contentstuff.NewMarkdownParser(contentstuff.DefaultParserConfig())
 				_, body, err := mdParser.ExtractFrontmatter([]byte(hf.Content))
 				if err != nil {
 					continue
 				}
 
-				histResponses = append(histResponses, histReponse{
+				fullHistory = append(fullHistory, histReponse{
 					Title: hf.Title,
 					Body:  string(body),
 
@@ -167,26 +175,31 @@ func handleEditPageData(c *gin.Context) {
 				})
 			}
 
+			var historyResponse []histReponse
 			// build diffs now
-			for i := 1; i < len(histResponses); i++ {
-				curr := histResponses[i-1]
-				prev := histResponses[i]
+			for i := 0; i < len(fullHistory)-1; i++ {
+				curr := fullHistory[i]
+				prev := fullHistory[i+1]
 				diffHTML, inserts, deletes := buildDiffToDeltaHTML(prev.Body, curr.Body)
-				histResponses[i-1].DiffHTML = diffHTML
 
-				var insertClass = "summary-inserts"
-				var deleteClass = "summary-deletes"
-				if inserts == 0 {
-					insertClass = "summary-grey"
-				}
-				if deletes == 0 {
-					deleteClass = "summary-grey"
-				}
+				if inserts > 0 || deletes > 0 {
+					histItem := fullHistory[i]
+					histItem.DiffHTML = diffHTML
 
-				histResponses[i-1].DeltaSummary = fmt.Sprintf("<span class='%s'>+%d</span>/<span class='%s'>-%d</span>", insertClass, inserts, deleteClass, deletes)
+					var insertClass = "summary-inserts"
+					var deleteClass = "summary-deletes"
+					if inserts == 0 {
+						insertClass = "summary-grey"
+					}
+					if deletes == 0 {
+						deleteClass = "summary-grey"
+					}
+					histItem.DeltaSummary = fmt.Sprintf(`<span class="%s">+%d</span> / <span class="%s">-%d</span>`, insertClass, inserts, deleteClass, deletes)
+					historyResponse = append(historyResponse, histItem)
+				}
 			}
 
-			c.JSON(200, gin.H{"history": histResponses})
+			c.JSON(200, gin.H{"history": historyResponse})
 			return
 		}
 	}
@@ -199,7 +212,7 @@ func handleEditPageData(c *gin.Context) {
 		}
 
 		// if path exists return its content
-		data, err := buildEditPageDataResponse(path)
+		data, err := s.buildEditPageDataResponse(path)
 		if err != nil {
 			c.JSON(404, gin.H{"error": err.Error()})
 			return
@@ -261,12 +274,12 @@ func buildDiffToDeltaHTML(text1, text2 string) (string, int, int) {
 	return textString, insertCount, deleteCount
 }
 
-func buildBreadCrumbLinks(path string) []LinkData {
+func buildBreadCrumbLinks(path string) []contentstuff.LinkData {
 	path = strings.Trim(path, "/")
 
 	parts := SplitPath(path)
-	var links []LinkData
-	links = append(links, LinkData{
+	var links []contentstuff.LinkData
+	links = append(links, contentstuff.LinkData{
 		Text: "Home",
 		URL:  "/",
 	})
@@ -277,7 +290,7 @@ func buildBreadCrumbLinks(path string) []LinkData {
 		}
 
 		linkPath := strings.Join(parts[:i+1], "/")
-		links = append(links, LinkData{
+		links = append(links, contentstuff.LinkData{
 			Text: parts[i],
 			URL:  "/" + linkPath,
 		})
@@ -285,8 +298,8 @@ func buildBreadCrumbLinks(path string) []LinkData {
 	return links
 }
 
-func buildEditPageDataResponse(path string) (editPageData, error) {
-	file, ok := siteContent.DoPath(path)
+func (s *AdminApp) buildEditPageDataResponse(path string) (editPageData, error) {
+	file, ok := s.SiteContent.DoPath(path)
 	if !ok {
 		defaultResponse := editPageData{
 			FullSlug:    path,
@@ -310,10 +323,10 @@ func buildEditPageDataResponse(path string) (editPageData, error) {
 
 		return defaultResponse, nil
 	}
-	if file.FileType != FileTypeMarkdown && file.FileType != FileTypeHTML {
+	if file.FileType != contentstuff.FileTypeMarkdown && file.FileType != contentstuff.FileTypeHTML {
 		return editPageData{}, fmt.Errorf("not editable file type")
 	}
-	pg := NewPageFromFileDetail(&file)
+	pg := contentstuff.NewPageFromFileDetail(&file)
 	data := editPageData{
 		FullSlug:    pg.Slug(),
 		Frontmatter: file.ParsedContent.Frontmatter.Raw,
@@ -324,16 +337,16 @@ func buildEditPageDataResponse(path string) (editPageData, error) {
 	return data, nil
 }
 
-func handleAdminEditor(c *gin.Context) {
+func (s *AdminApp) HandleAdminEditor(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
 		c.String(400, "path query param is required")
 		return
 	}
 
-	data, err := buildEditPageDataResponse(path)
+	data, err := s.buildEditPageDataResponse(path)
 	if err != nil {
-		logrus.Errorf("error building edit page data response: %v", err)
+		log.Errorf("error building edit page data response: %v", err)
 	}
 
 	c.HTML(200, "edit.html", gin.H{
@@ -372,4 +385,13 @@ func SplitPath(path string) []string {
 		path = filepath.Clean(dir)
 	}
 	return parts
+}
+
+func (e editPageData) JSONString() string {
+	jsonBytes, err := json.MarshalIndent(e, "", "  ")
+	if err != nil {
+		log.Errorf("error marshalling editPageData to JSON: %v", err)
+		return "{}"
+	}
+	return string(jsonBytes)
 }

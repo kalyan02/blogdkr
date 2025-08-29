@@ -1,4 +1,4 @@
-package main
+package contentstuff
 
 import (
 	"errors"
@@ -14,13 +14,23 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+
+	"oddity/pkg/config"
 )
 
 type ContentStuff struct {
 	FileName    map[string]FileDetail
 	SlugFileMap map[string]FileDetail
-	Config      Config
+	Config      config.Config
 	DBHandle    *gorm.DB
+}
+
+func (c *ContentStuff) AllFiles() []FileDetail {
+	var fds []FileDetail
+	for _, fd := range c.FileName {
+		fds = append(fds, fd)
+	}
+	return fds
 }
 
 func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
@@ -33,7 +43,7 @@ func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
 	return FileDetail{}, false
 }
 
-func NewContentStuff(config Config) *ContentStuff {
+func NewContentStuff(config config.Config) *ContentStuff {
 	return &ContentStuff{
 		Config:      config,
 		FileName:    make(map[string]FileDetail),
@@ -354,7 +364,7 @@ type FileDetail struct {
 	ParsedContent *ParsedContent
 }
 
-func SaveFileDetail(cfg *Config, fd *FileDetail) error {
+func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 	if fd.FileName == "" {
 		return fmt.Errorf("file name is empty")
 	}
@@ -364,21 +374,21 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 			return fmt.Errorf("error converting to markdown: %v", err)
 		}
 
-		targetFile := filepath.Join(cfg.ContentDir, fd.FileName)
+		targetFile := filepath.Join(sc.Config.ContentDir, fd.FileName)
 
-		err = siteContent.WriteContentFile(fd.FileName, content)
+		err = sc.WriteContentFile(fd.FileName, content)
 		if err != nil {
 			return fmt.Errorf("error writing file: %v", err)
 		}
 
 		// refresh the dir
-		err = siteContent.RefreshContent(filepath.Dir(fd.FileName))
+		err = sc.RefreshContent(filepath.Dir(fd.FileName))
 		if err != nil {
 			return fmt.Errorf("error refreshing content: %v", err)
 		}
 
 		// refresh the file
-		err = siteContent.RefreshContent(fd.FileName)
+		err = sc.RefreshContent(fd.FileName)
 		if err != nil {
 			return fmt.Errorf("error refreshing content: %v", err)
 		}
@@ -390,24 +400,24 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 		}
 		for _, ip := range indexPaths {
 			if _, err := os.Stat(ip); err == nil {
-				relativeIP, err := filepath.Rel(cfg.ContentDir, ip)
+				relativeIP, err := filepath.Rel(sc.Config.ContentDir, ip)
 				if err != nil {
 					logrus.Errorf("error getting relative path for %s: %v", ip, err)
 					continue
 				}
-				err = siteContent.RefreshContent(relativeIP)
+				err = sc.RefreshContent(relativeIP)
 				if err != nil {
 					logrus.Errorf("error refreshing content for %s: %v", ip, err)
 				}
-				err = wireController.ScanContentFileForQueries(relativeIP)
+				err = wc.ScanContentFileForQueries(relativeIP)
 				if err != nil {
 					logrus.Errorf("error scanning content file for queries %s: %v", ip, err)
 				}
-				err = wireController.NotifyFileChanged(relativeIP)
+				err = wc.NotifyFileChanged(relativeIP)
 				if err != nil {
 					logrus.Errorf("error notifying file change for %s: %v", ip, err)
 				}
-				err = siteContent.RefreshContent(relativeIP)
+				err = sc.RefreshContent(relativeIP)
 				if err != nil {
 					logrus.Errorf("error refreshing content for %s: %v", ip, err)
 				}
@@ -419,7 +429,7 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 
 	if fd.FileType == FileTypeHTML {
 		// just write body
-		err := siteContent.WriteContentFile(fd.FileName, string(fd.ParsedContent.HTML))
+		err := sc.WriteContentFile(fd.FileName, string(fd.ParsedContent.HTML))
 		if err != nil {
 			return fmt.Errorf("error writing file: %v", err)
 		}

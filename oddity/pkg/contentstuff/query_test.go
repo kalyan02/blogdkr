@@ -1,7 +1,9 @@
-package main
+package contentstuff
 
 import (
 	"testing"
+
+	"oddity/pkg/config"
 )
 
 func TestParseQuery(t *testing.T) {
@@ -346,7 +348,7 @@ End of page.`,
 			// Create a mock Wire instance
 			contentStuff := &ContentStuff{
 				FileName: make(map[string]FileDetail),
-				Config:   Config{ContentDir: "/test"},
+				Config:   config.Config{ContentDir: "/test"},
 			}
 			wire := NewWire(contentStuff)
 

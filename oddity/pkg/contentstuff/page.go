@@ -1,4 +1,4 @@
-package main
+package contentstuff
 
 import (
 	"html/template"
@@ -32,7 +32,7 @@ func (p *Page) Title() string {
 
 	// check front matter title
 	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
-		if title, ok := p.File.ParsedContent.Frontmatter.Data["title"].(string); ok && title != "" {
+		if title, ok := p.File.ParsedContent.Frontmatter.GetString("title"); ok && title != "" {
 			firstL1 = title
 		}
 	}
@@ -86,7 +86,7 @@ func (p *Page) SafeHTML() template.HTML {
 func (p *Page) Slug() string {
 	pgslug := ""
 	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
-		if slug, ok := p.File.ParsedContent.Frontmatter.Data["slug"].(string); ok && slug != "" {
+		if slug, ok := p.File.ParsedContent.Frontmatter.GetString("slug"); ok && slug != "" {
 			pgslug = slug
 			pgslug = filepath.Join(filepath.Dir(p.File.FileName), pgslug)
 		}
@@ -117,17 +117,21 @@ func parseUnixMilliOrSeconds(ts string) (time.Time, error) {
 }
 
 func (p *Page) tryParseTimeField(field string) (time.Time, bool) {
-	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
-		if strVal, ok := p.File.ParsedContent.Frontmatter.Data[field].(string); ok && strVal != "" {
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil && p.File.ParsedContent.Frontmatter.HasKey(field) {
+
+		// if time.Time type
+
+		if strVal, ok := p.File.ParsedContent.Frontmatter.GetString(field); ok && strVal != "" {
 			if t, err := parseUnixMilliOrSeconds(strVal); err == nil && !t.IsZero() {
 				return t, true
 			}
 		}
 		// if integer type
-		if intVal, ok := p.File.ParsedContent.Frontmatter.Data[field].(int); ok && intVal != 0 {
+		val, _ := p.File.ParsedContent.Frontmatter.GetValue(field)
+		if intVal, ok := val.(int); ok && intVal != 0 {
 			return timeFromMilliOrSeconds(int64(intVal)), true
 		}
-		if int64Val, ok := p.File.ParsedContent.Frontmatter.Data[field].(int64); ok && int64Val != 0 {
+		if int64Val, ok := val.(int64); ok && int64Val != 0 {
 			return timeFromMilliOrSeconds(int64Val), true
 		}
 	}

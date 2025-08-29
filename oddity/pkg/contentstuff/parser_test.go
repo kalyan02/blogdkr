@@ -1,4 +1,4 @@
-package main
+package contentstuff
 
 import (
 	"strings"
@@ -36,7 +36,7 @@ This is a test post with **YAML** frontmatter.
 	}
 
 	// Test frontmatter data
-	title := result.Frontmatter.GetString("title")
+	title, _ := result.Frontmatter.GetString("title")
 	if title != "Test Post" {
 		t.Errorf("Expected title 'Test Post', got '%s'", title)
 	}
@@ -104,7 +104,7 @@ Check out this [[wiki link]] and #toml hashtag.`)
 	}
 
 	// Test frontmatter data
-	title := result.Frontmatter.GetString("title")
+	title, _ := result.Frontmatter.GetString("title")
 	if title != "TOML Test Post" {
 		t.Errorf("Expected title 'TOML Test Post', got '%s'", title)
 	}

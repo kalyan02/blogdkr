@@ -1,4 +1,4 @@
-package main
+package contentstuff
 
 import (
 	"fmt"
@@ -57,9 +57,19 @@ func NewWire(content *ContentStuff) *Wire {
 	}
 }
 
+func (w *Wire) QueryCount() int {
+	cnt := 0
+	for _, qList := range w.queries {
+		cnt += len(qList)
+	}
+	return cnt
+}
+
 // ScanForQueries scans all content files for query comments
 func (w *Wire) ScanForQueries() error {
-	for filePath, fileDetail := range w.content.FileName {
+	allFiles := w.content.AllFiles()
+	for _, fileDetail := range allFiles {
+		filePath := fileDetail.FileName
 		if fileDetail.FileType == FileTypeMarkdown || fileDetail.FileType == FileTypeHTML {
 			queries, err := w.extractQueriesFromFile(filePath)
 			if err != nil {
@@ -75,7 +85,7 @@ func (w *Wire) ScanForQueries() error {
 }
 
 func (w *Wire) ScanContentFileForQueries(filePath string) error {
-	fileDetail, exists := w.content.FileName[filePath]
+	fileDetail, exists := w.content.DoPath(filePath)
 	if !exists {
 		return fmt.Errorf("file not found in content store: %s", filePath)
 	}
@@ -180,7 +190,7 @@ func (w *Wire) watcherMatchesTrigger(watcher *QueryWatcher, trigger *WatchTrigge
 // NotifyFileChanged is called when a file changes
 func (w *Wire) NotifyFileChanged(filePath string) error {
 	// Look up file in content store
-	_, exists := w.content.FileName[filePath]
+	_, exists := w.content.DoPath(filePath)
 	if !exists {
 		return fmt.Errorf("file not found in content store: %s", filePath)
 	}
@@ -201,7 +211,7 @@ func (w *Wire) NotifyFileChanged(filePath string) error {
 // NotifyAll refreshes all queries that might be affected by the specified file change
 func (w *Wire) NotifyAll(modifiedFile string) error {
 	// Look up file in content store
-	fileDetail, exists := w.content.FileName[modifiedFile]
+	fileDetail, exists := w.content.DoPath(modifiedFile)
 	if !exists {
 		return fmt.Errorf("file not found in content store: %s", modifiedFile)
 	}
@@ -287,7 +297,7 @@ func (w *Wire) updateQuery(location QueryLocation) error {
 
 	// Write back to file
 	newContent := strings.Join(newLines, "\n")
-	return siteContent.WriteContentFile(location.FilePath, newContent)
+	return w.content.WriteContentFile(location.FilePath, newContent)
 }
 
 // executeQuery runs a query against current content
@@ -304,7 +314,8 @@ func (w *Wire) executeQuery(query *QueryAST) ([]string, error) {
 func (w *Wire) executePostsQuery(query *QueryAST) ([]string, error) {
 	// Get all posts (non-index markdown files)
 	var posts []FileDetail
-	for _, file := range w.content.FileName {
+	var allFiles = w.content.AllFiles()
+	for _, file := range allFiles {
 		if (file.FileType == FileTypeMarkdown || file.FileType == FileTypeHTML) &&
 			!strings.HasSuffix(file.FileName, "index.md") {
 
