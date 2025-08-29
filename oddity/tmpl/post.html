@@ -27,7 +27,7 @@
 <body class="font-mono bg-white min-h-screen">
     <!-- Navigation Bar -->
     <div class="py-1 border-b-0 border-gray-100">
-        <div class="max-w-4xl mx-auto px-2 pb-2 pt-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 {{if .IsAuthenticated}} border-l-2 border-l-green-400{{end}}4">
+        <div class="max-w-4xl mx-auto px-2 pb-2 pt-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 {{if .IsAuthenticated}} border-l border-l-green-400{{end}} {{if .IsPrivate}}border-b border-b-orange-300{{end}}">
             <!-- Left: Site Title -->
             <!--
             <div class="flex gap-1 flex-wrap justify-center lg:justify-start">

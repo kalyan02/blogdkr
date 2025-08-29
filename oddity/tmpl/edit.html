@@ -153,7 +153,12 @@
         <!-- Main Content -->
         <div :class="'mx-auto px-4 flex flex-col gap-6 ' + editorWidthOptions[editorWidth].containerClass + (!sidebarBelow ? ' lg:flex-row' : ' lg:flex-col')">
             <!-- Editor Area -->
-            <div class="flex-1 border-t border-solid" :class="{ 'border-gray-100': distractionFree, 'border-gray-300': !distractionFree }">
+            <div class="flex-1 border-t border-solid" :class="{
+                    'border-gray-100': distractionFree,
+                    'border-gray-300': !distractionFree && !isPrivate,
+                    'border-orange-300': !distractionFree && isPrivate,
+                    'border-orange-100': distractionFree && isPrivate,
+                }">
                 <div id="richeditor" class="w-full richeditor"></div>
 
             </div>

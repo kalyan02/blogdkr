@@ -21,7 +21,7 @@ import (
 type ContentStuff struct {
 	FileName    map[string]FileDetail
 	SlugFileMap map[string]FileDetail
-	Config      config.Config
+	Config      config.ContentConfig
 	DBHandle    *gorm.DB
 }
 
@@ -43,7 +43,7 @@ func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
 	return FileDetail{}, false
 }
 
-func NewContentStuff(config config.Config) *ContentStuff {
+func NewContentStuff(config config.ContentConfig) *ContentStuff {
 	return &ContentStuff{
 		Config:      config,
 		FileName:    make(map[string]FileDetail),

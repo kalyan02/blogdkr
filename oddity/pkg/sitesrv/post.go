@@ -18,6 +18,7 @@ import (
 type SiteApp struct {
 	WireController *contentstuff.Wire
 	SiteContent    *contentstuff.ContentStuff
+	Config         config.Config
 }
 
 func (s *SiteApp) RegisterRoutes(r *gin.Engine) {
@@ -63,7 +64,7 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 	}
 
 	if authz.IsAuthenticated(c) {
-		render404ButMaybeCreate(c, requestPath)
+		s.render404ButMaybeCreate(c, requestPath)
 		return
 	}
 
@@ -84,7 +85,7 @@ func (s *SiteApp) renderIndexAtPath(c *gin.Context, path string) {
 
 	// if none of those exist then show 404
 	defaultIndexPath := filepath.Join(path, "index")
-	render404ButMaybeCreate(c, defaultIndexPath)
+	s.render404ButMaybeCreate(c, defaultIndexPath)
 }
 
 func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.NavigationLink {
@@ -98,7 +99,7 @@ func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.Navigation
 	}
 
 	if parentSlug == "/" || parentSlug == "/index" || parentSlug == "/blog" {
-		return config.DefaultSiteConfig.Navigation
+		return s.Config.Site.Navigation
 	}
 
 	var links []config.NavigationLink
@@ -120,11 +121,11 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 	}
 	page := contentstuff.NewPageFromFileDetail(&file)
 	if page.IsPrivate() && !authz.IsAuthenticated(c) {
-		render404(c)
+		s.render404(c)
 		return
 	}
 
-	sc := config.DefaultSiteConfig
+	sc := s.Config.Site
 	sc.Navigation = s.buildPageNavLinks(page)
 
 	indexPage := contentstuff.PostPage{
@@ -149,19 +150,19 @@ func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 
 	if !authz.IsAuthenticated(c) {
 		if contentstuff.IsPrivate(s.SiteContent, file) {
-			render404(c)
+			s.render404(c)
 			return
 		}
 	}
 
-	sc := config.DefaultSiteConfig
+	sc := s.Config.Site
 	sc.Navigation = s.buildPageNavLinks(page)
 
 	postPage := contentstuff.PostPage{
 		Site:            sc,
 		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
 		IsAuthenticated: authz.IsAuthenticated(c),
-		IsPrivate:       page.IsPrivate(),
+		IsPrivate:       contentstuff.IsPrivate(s.SiteContent, file),
 		NewPostHintSlug: s.createNewPostSlugHint(page),
 		Meta: contentstuff.PageMeta{
 			Title: page.Title(),
@@ -194,9 +195,9 @@ func (s *SiteApp) createNewPostSlugHint(path *contentstuff.Page) string {
 	return hintSlug
 }
 
-func render404(c *gin.Context) {
+func (s *SiteApp) render404(c *gin.Context) {
 	postPage := contentstuff.PostPage{
-		Site: config.DefaultSiteConfig,
+		Site: s.Config.Site,
 	}
 	postPage.Meta = contentstuff.PageMeta{
 		Title: "404 Not Found",
@@ -207,9 +208,9 @@ func render404(c *gin.Context) {
 
 }
 
-func render404ButMaybeCreate(c *gin.Context, path string) {
+func (s *SiteApp) render404ButMaybeCreate(c *gin.Context, path string) {
 	postPage := contentstuff.PostPage{
-		Site: config.DefaultSiteConfig,
+		Site: s.Config.Site,
 	}
 	postPage.Meta = contentstuff.PageMeta{
 		Title: "404 Not Found",

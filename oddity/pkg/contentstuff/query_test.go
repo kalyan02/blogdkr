@@ -348,7 +348,7 @@ End of page.`,
 			// Create a mock Wire instance
 			contentStuff := &ContentStuff{
 				FileName: make(map[string]FileDetail),
-				Config:   config.Config{ContentDir: "/test"},
+				Config:   config.ContentConfig{ContentDir: "/test"},
 			}
 			wire := NewWire(contentStuff)
 
