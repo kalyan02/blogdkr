@@ -170,30 +170,6 @@ func (w *Wire) extractQueriesFromContent(filePath string, content string) ([]Que
 	return queries, nil
 }
 
-//// registerWatchersForQueries creates watchers for queries that need updates
-//func (w *Wire) registerWatchersForQueries(queries []QueryLocation) {
-//	for _, query := range queries {
-//		trigger := w.determineTriggerForQuery(query.Query)
-//		if trigger != nil {
-//			// Find existing watcher or create new one
-//			found := false
-//			for i := range w.watchers {
-//				if w.watcherMatchesTrigger(&w.watchers[i], trigger) {
-//					w.watchers[i].Locations = append(w.watchers[i].Locations, query)
-//					found = true
-//					break
-//				}
-//			}
-//			if !found {
-//				w.watchers = append(w.watchers, QueryWatcher{
-//					Trigger:   *trigger,
-//					Locations: []QueryLocation{query},
-//				})
-//			}
-//		}
-//	}
-//}
-
 // determineTriggerForQuery figures out what should trigger this query to update
 func (w *Wire) determineTriggerForQuery(query *QueryAST) *WatchTrigger {
 	switch query.Type {
@@ -233,54 +209,8 @@ func (w *Wire) NotifyFileChanged(filePath string) error {
 		}
 	}
 
-	// Find all watchers that care about this change
-	//affectedWatchers := w.findAffectedWatchers(filePath, fileDetail)
-
-	// Update all affected queries
-	//for _, watcher := range affectedWatchers {
-	//	for _, location := range watcher.Locations {
-	//		if err := w.updateQuery(location); err != nil {
-	//			return fmt.Errorf("error updating query in %s: %v", location.FilePath, err)
-	//		}
-	//	}
-	//}
-
 	return nil
 }
-
-// findAffectedWatchers finds watchers that should trigger for this file change
-//func (w *Wire) findAffectedWatchers(filePath string, fileDetail FileDetail) []QueryWatcher {
-//	affected := make([]QueryWatcher, 0)
-//
-//	for _, watcher := range w.watchers {
-//		shouldTrigger := false
-//
-//		switch watcher.Trigger.Type {
-//		case TriggerFileChanged:
-//			matched, _ := filepath.Match(watcher.Trigger.Pattern, filePath)
-//			shouldTrigger = matched
-//
-//		case TriggerAnyContent:
-//			// Check if file type matches
-//			for _, ft := range watcher.Trigger.FileTypes {
-//				if ft == fileDetail.FileType {
-//					shouldTrigger = true
-//					break
-//				}
-//			}
-//
-//		case TriggerLinkChanged:
-//			// Check if this file has links that might affect backlink queries
-//			shouldTrigger = fileDetail.ParsedContent != nil && len(fileDetail.ParsedContent.WikiLinks) > 0
-//		}
-//
-//		if shouldTrigger {
-//			affected = append(affected, watcher)
-//		}
-//	}
-//
-//	return affected
-//}
 
 // NotifyAll refreshes all queries that might be affected by the specified file change
 func (w *Wire) NotifyAll(modifiedFile string) error {
@@ -417,13 +347,6 @@ func (w *Wire) executePostsQuery(query *QueryAST) ([]string, error) {
 
 	// Convert to markdown format based on specified format
 	return w.formatResults(limited, query.MDFormat)
-}
-
-// executeBacklinksQuery handles "backlinks" queries
-func (w *Wire) executeBacklinksQuery(query *QueryAST) ([]string, error) {
-	// This would need to be implemented based on your wiki link tracking
-	// For now, return empty
-	return []string{}, nil
 }
 
 // Helper functions for query execution

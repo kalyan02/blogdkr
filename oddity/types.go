@@ -77,13 +77,6 @@ type PostSummary struct {
 	Tags    []string  `json:"tags,omitempty"`
 }
 
-// RelatedPost represents a related blog post for the sidebar/footer
-type RelatedPost struct {
-	Title string    `json:"title"`
-	Slug  string    `json:"slug"`
-	Date  time.Time `json:"date"`
-}
-
 // PostsPage represents the data structure for rendering the posts listing page
 type PostsPage struct {
 	// Common page data

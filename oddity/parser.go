@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"net/url"
 	"path"
 	"regexp"
@@ -191,16 +190,6 @@ func (mp *MarkdownParser) initializeParser() {
 
 	// Register shortcode parser
 	mp.parser.RegisterInline('{', mp.shortcodeParser())
-}
-
-type wikiLinkParserConfigResult struct {
-	wikilinks     []string
-	replaceLink   bool
-	replaceLinkFn func(string) string
-}
-
-func (mp *MarkdownParser) createWikiLinkParser(parser *parser.Parser) {
-
 }
 
 // initializeRenderer sets up the HTML renderer with appropriate flags
@@ -570,23 +559,7 @@ func (mp *MarkdownParser) nodeToString(node ast.Node) string {
 	return buffer.String()
 }
 
-// hashtags extracts hashtags from markdown content
-func hashtags(content []byte) []string {
-	parser := NewMarkdownParser(DefaultParserConfig())
-	parsed, err := parser.Parse(content)
-	if err != nil {
-		return []string{}
-	}
-	return parsed.Hashtags
-}
-
 // Utility functions for extracting specific data
-
-// ExtractFrontmatter extracts and parses frontmatter from content without full parsing
-func ExtractFrontmatter(content []byte) (*FrontmatterData, []byte, error) {
-	parser := NewMarkdownParser(DefaultParserConfig())
-	return parser.ExtractFrontmatter(content)
-}
 
 // ExtractPlainText extracts plain text from markdown content
 func ExtractPlainText(content []byte) string {
@@ -746,18 +719,6 @@ func extractNodeText(node ast.Node) string {
 		return ast.GoToNext
 	})
 	return buffer.String()
-}
-
-// Legacy utility functions
-
-// toString extracts text from an AST node (legacy compatibility)
-func toString(node ast.Node) string {
-	return extractNodeText(node)
-}
-
-// unsafeBytes converts bytes to template.HTML without sanitization
-func unsafeBytes(bytes []byte) template.HTML {
-	return template.HTML(bytes)
 }
 
 // Helper methods for FrontmatterData
