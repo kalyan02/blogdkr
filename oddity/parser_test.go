@@ -254,3 +254,72 @@ This post has a [[SamplePage]] link.`)
 		}
 	})
 }
+
+func TestToMarkdown(t *testing.T) {
+	content := []byte(`---
+title: Markdown Roundtrip
+tags:
+  - test
+  - markdown
+---
+# Heading
+This is a **test** post with #hashtags and a [[WikiLink]].`)
+
+	parser := NewMarkdownParser(DefaultParserConfig())
+	result, err := parser.Parse(content)
+	if err != nil {
+		t.Fatalf("Failed to parse content: %v", err)
+	}
+
+	md, err := result.ToMarkdown()
+	if err != nil {
+		t.Fatalf("Failed to convert back to markdown: %v", err)
+	}
+
+	parser = NewMarkdownParser(DefaultParserConfig())
+	result2, err := parser.Parse([]byte(md))
+	if err != nil {
+		t.Fatalf("Failed to parse roundtrip markdown: %v", err)
+	}
+
+	if result2.Title != result.Title {
+		t.Errorf("Expected title '%s', got '%s' after roundtrip", result.Title, result2.Title)
+	}
+	if len(result2.Hashtags) != len(result.Hashtags) {
+		t.Errorf("Expected %d hashtags, got %d after roundtrip", len(result.Hashtags), len(result2.Hashtags))
+	}
+	if string(result2.Body) != string(result.Body) {
+		t.Errorf("Expected body to match after roundtrip.\nOriginal:\n%s\n\nGot:\n%s", result.Body, result2.Body)
+	}
+
+	// validate all frontmatter keys are the same
+	for k, v := range result.Frontmatter.Data {
+		v2, ok := result2.Frontmatter.Data[k]
+		if !ok {
+			t.Errorf("Expected frontmatter key '%s' to exist after roundtrip", k)
+			continue
+		}
+
+		// if strings or ints, compare directly
+		// for slices, compare length and elements
+		// for other types, just use fmt.Sprintf to compare string representations
+		if sv, ok := v.([]interface{}); ok {
+			sv2, ok2 := v2.([]interface{})
+			if !ok2 || len(sv) != len(sv2) {
+				t.Errorf("Expected frontmatter key '%s' to have slice value '%v', got '%v' after roundtrip", k, v, v2)
+				continue
+			}
+			for i := range sv {
+				if sv[i] != sv2[i] {
+					t.Errorf("Expected frontmatter key '%s' slice element %d to be '%s', got '%s' after roundtrip", k, i, sv[i], sv2[i])
+				}
+			}
+			continue
+		}
+
+		if v != v2 {
+			t.Errorf("Expected frontmatter key '%s' to have value '%v', got '%v' after roundtrip", k, v, v2)
+		}
+	}
+
+}

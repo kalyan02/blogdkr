@@ -50,9 +50,11 @@ type PostPage struct {
 	PageHTML template.HTML `json:"page_html"`
 
 	// Wiki-like features
-	Backlinks   []WikiLink `json:"backlinks,omitempty"`
-	LinkedPages []WikiLink `json:"linked_pages,omitempty"`
-	WordCount   int        `json:"word_count,omitempty"`
+	Backlinks       []WikiLink `json:"backlinks,omitempty"`
+	LinkedPages     []WikiLink `json:"linked_pages,omitempty"`
+	WordCount       int        `json:"word_count,omitempty"`
+	NewPostHintSlug string     `json:"new_post_hint_slug,omitempty"`
+	AdminLogged     bool       `json:"admin_logged,omitempty"`
 }
 
 // IndexPage represents the data structure for rendering the main blog index

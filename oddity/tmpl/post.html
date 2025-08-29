@@ -38,7 +38,7 @@
             -->
 
             <!-- Right: Navigation Links -->
-            {{if .Site.Navigation}}
+            {{if or .Site.Navigation .NewPostHintSlug}}
             <div class="flex gap-1 justify-center">
                 {{range .Site.Navigation}}
                 <a href="{{.URL}}" 
@@ -46,6 +46,15 @@
                    class="text-gray-600 text-xs px-2 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors{{if .IsActive}} bg-blue-600 text-white hover:bg-blue-700 hover:text-white{{end}}">
                     {{.Name}}
                 </a>
+                {{end}}
+                {{ if .NewPostHintSlug }}
+                    <input type="text" value="/{{.NewPostHintSlug}}" id="new-post-hint"
+                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 cursor-pointer w-60" />
+
+                    <input type="button" value="Add"
+                      onclick="location.href='/admin/edit?path=' + document.getElementById('new-post-hint').value"
+                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer" />
+
                 {{end}}
             </div>
             {{end}}

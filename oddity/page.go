@@ -93,7 +93,6 @@ func (p *Page) Slug() string {
 	}
 	if pgslug == "" {
 		pgslug = strings.TrimSuffix(p.File.FileName, filepath.Ext(p.File.FileName))
-		pgslug = filepath.Join(filepath.Dir(p.File.FileName), pgslug)
 	}
 	return pgslug
 }

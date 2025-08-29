@@ -202,16 +202,66 @@ type FileDetail struct {
 }
 
 func SaveFileDetail(cfg *Config, fd *FileDetail) error {
+	if fd.FileName == "" {
+		return fmt.Errorf("file name is empty")
+	}
 	if fd.FileType == FileTypeMarkdown {
 		content, err := fd.ParsedContent.ToMarkdown()
 		if err != nil {
 			return fmt.Errorf("error converting to markdown: %v", err)
 		}
 
-		err = os.WriteFile(filepath.Join(cfg.ContentDir, fd.FileName), []byte(content), 0644)
+		targetFile := filepath.Join(cfg.ContentDir, fd.FileName)
+
+		targetFileDir := filepath.Dir(targetFile)
+		if _, err := os.Stat(targetFileDir); os.IsNotExist(err) {
+			err = os.MkdirAll(targetFileDir, 0755)
+			if err != nil {
+				return fmt.Errorf("error creating directory: %v", err)
+			}
+		}
+
+		err = os.WriteFile(targetFile, []byte(content), 0644)
 		if err != nil {
 			return fmt.Errorf("error writing file: %v", err)
 		}
+
+		// refresh the dir
+		err = siteContent.RefreshContent(filepath.Dir(fd.FileName))
+		if err != nil {
+			return fmt.Errorf("error refreshing content: %v", err)
+		}
+
+		// refresh the file
+		err = siteContent.RefreshContent(fd.FileName)
+		if err != nil {
+			return fmt.Errorf("error refreshing content: %v", err)
+		}
+
+		indexPaths := []string{
+			filepath.Join(targetFileDir, "index.md"),
+			filepath.Join(targetFileDir, "index.html"),
+			filepath.Join(targetFileDir, "_index.md"),
+		}
+		for _, ip := range indexPaths {
+			if _, err := os.Stat(ip); err == nil {
+				relativeIP, err := filepath.Rel(cfg.ContentDir, ip)
+				if err != nil {
+					logrus.Errorf("error getting relative path for %s: %v", ip, err)
+					continue
+				}
+				err = wireController.NotifyFileChanged(relativeIP)
+				if err != nil {
+					logrus.Errorf("error notifying file change for %s: %v", ip, err)
+				}
+				err = siteContent.RefreshContent(relativeIP)
+				if err != nil {
+					logrus.Errorf("error refreshing content for %s: %v", ip, err)
+				}
+			}
+		}
+
+		return nil
 	}
 
 	if fd.FileType == FileTypeHTML {

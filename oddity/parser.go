@@ -35,6 +35,18 @@ type FrontmatterData struct {
 	EndPos   int
 }
 
+func (fm *FrontmatterData) SetRaw(data []byte) error {
+	fm.Raw = string(data)
+	switch fm.Type {
+	case FrontmatterYAML:
+		return yaml.Unmarshal(data, &fm.Data)
+	case FrontmatterTOML:
+		return toml.Unmarshal(data, &fm.Data)
+	default:
+		return nil
+	}
+}
+
 // ParserConfig holds configuration for the markdown parser
 type ParserConfig struct {
 	EnableWikiLinks      bool
@@ -103,12 +115,12 @@ func (pc *ParsedContent) ToMarkdown() (string, error) {
 	}
 	// add headings if any
 	if pc.Title != "" {
-		parts = append(parts, fmt.Sprintf("# %s\n", pc.Title))
+		parts = append(parts, fmt.Sprintf("# %s", pc.Title))
 	} else if len(pc.Headings) > 0 {
 		// get first h1
 		for _, h := range pc.Headings {
 			if h.Level == 1 {
-				parts = append(parts, fmt.Sprintf("# %s\n", h.Text))
+				parts = append(parts, fmt.Sprintf("# %s", h.Text))
 				break
 			}
 		}
@@ -307,14 +319,12 @@ func (mp *MarkdownParser) ExtractFrontmatter(content []byte) (*FrontmatterData, 
 	// Use (?s) flag for . to match newlines
 	if yamlMatch := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\s*\n`).FindSubmatch(content); yamlMatch != nil {
 		frontmatter := &FrontmatterData{
-			Type:     FrontmatterYAML,
-			Raw:      string(yamlMatch[1]),
-			StartPos: 0,
-			EndPos:   len(yamlMatch[0]),
-			Data:     make(map[string]interface{}),
+			Type:   FrontmatterYAML,
+			EndPos: len(yamlMatch[0]),
+			Data:   make(map[string]interface{}),
 		}
 
-		if err := yaml.Unmarshal(yamlMatch[1], &frontmatter.Data); err != nil {
+		if err := frontmatter.SetRaw(yamlMatch[1]); err != nil {
 			return nil, content, fmt.Errorf("failed to parse YAML frontmatter: %w", err)
 		}
 
@@ -326,14 +336,12 @@ func (mp *MarkdownParser) ExtractFrontmatter(content []byte) (*FrontmatterData, 
 	// Use (?s) flag for . to match newlines
 	if tomlMatch := regexp.MustCompile(`(?s)^\+\+\+\s*\n(.*?)\n\+\+\+\s*\n`).FindSubmatch(content); tomlMatch != nil {
 		frontmatter := &FrontmatterData{
-			Type:     FrontmatterTOML,
-			Raw:      string(tomlMatch[1]),
-			StartPos: 0,
-			EndPos:   len(tomlMatch[0]),
-			Data:     make(map[string]interface{}),
+			Type:   FrontmatterTOML,
+			EndPos: len(tomlMatch[0]),
+			Data:   make(map[string]interface{}),
 		}
 
-		if err := toml.Unmarshal(tomlMatch[1], &frontmatter.Data); err != nil {
+		if err := frontmatter.SetRaw(tomlMatch[1]); err != nil {
 			return nil, content, fmt.Errorf("failed to parse TOML frontmatter: %w", err)
 		}
 
@@ -822,14 +830,14 @@ func (fm *FrontmatterData) Marshal() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("---\n%s---\n", string(out)), nil
+		return fmt.Sprintf("---\n%s---", string(out)), nil
 	case FrontmatterTOML:
 		var buf bytes.Buffer
 		encoder := toml.NewEncoder(&buf)
 		if err := encoder.Encode(fm.Data); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("+++\n%s+++\n", buf.String()), nil
+		return fmt.Sprintf("+++\n%s+++", buf.String()), nil
 	default:
 		return "", nil
 	}

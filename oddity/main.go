@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,16 +14,18 @@ import (
 )
 
 type Config struct {
-	ContentDir string
-	StaticDirs []string
-	ThemeDir   string
-	Port       int
+	ContentDir     string
+	StaticDirs     []string
+	ThemeDir       string
+	Port           int
+	DefaultNewHint string
 }
 
 var DefaultConfig = Config{
-	ContentDir: "content/content",
-	StaticDirs: []string{"content/static"},
-	Port:       8081,
+	ContentDir:     "content/content",
+	StaticDirs:     []string{"content/static"},
+	DefaultNewHint: "blog",
+	Port:           8081,
 }
 
 var SC = SiteConfig{
@@ -40,6 +43,8 @@ var SC = SiteConfig{
 }
 
 var siteContent *ContentStuff
+
+var wireController *Wire
 
 func main() {
 
@@ -60,21 +65,26 @@ func main() {
 	//}()
 
 	startT = time.Now()
-	wire := NewWire(siteContent)
-	err = wire.ScanForQueries()
+	wireController = NewWire(siteContent)
+	err = wireController.ScanForQueries()
 	if err != nil {
 		log.Fatalf("error scanning for queries: %v", err)
 	}
-	log.Infof("Scanned %d query files in %v", len(wire.queries), time.Since(startT))
+	log.Infof("Scanned %d query files in %v", len(wireController.queries), time.Since(startT))
 
 	// notify all index files
 	for fname := range siteContent.FileName {
 		if strings.HasSuffix(fname, "index.md") || strings.HasSuffix(fname, "index.html") || strings.HasSuffix(fname, "_index.md") {
-			err = wire.NotifyFileChanged(fname)
+			err = wireController.NotifyFileChanged(fname)
 			if err != nil {
 				log.Errorf("error notifying file changed: %v", err)
 			}
 			fmt.Println("Index file:", fname)
+
+			err = siteContent.RefreshContent(fname)
+			if err != nil {
+				log.Errorf("error refreshing content for %s: %v", fname, err)
+			}
 		}
 	}
 
@@ -162,6 +172,12 @@ func handleAllContentPages(c *gin.Context) {
 		renderPage(c, file)
 		return
 	}
+
+	if IsAuthenticated(c) {
+		renderDoesNotExistButMaybeCreate(c, requestPath)
+		return
+	}
+
 	c.String(404, "Not Found")
 }
 
@@ -209,8 +225,10 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 		Meta: PageMeta{
 			Title: page.Title(),
 		},
-		PageHTML: page.SafeHTML(),
-		EditURL:  fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
+		PageHTML:        page.SafeHTML(),
+		NewPostHintSlug: createNewPostSlugHint(page),
+		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
+		AdminLogged:     IsAuthenticated(c),
 	}
 
 	c.HTML(200, "post.html", indexPage)
@@ -221,17 +239,54 @@ func renderPage(c *gin.Context, file FileDetail) {
 	// load the file content and render it
 	p := NewPageFromFileDetail(&file)
 	postPage := PostPage{
-		Site:    SC,
-		EditURL: fmt.Sprintf("/admin/edit?path=%s", p.Slug()),
+		Site:            SC,
+		EditURL:         fmt.Sprintf("/admin/edit?path=%s", p.Slug()),
+		AdminLogged:     IsAuthenticated(c),
+		NewPostHintSlug: createNewPostSlugHint(p),
+		Meta: PageMeta{
+			Title: p.Title(),
+		},
+		PageHTML:    p.SafeHTML(),
+		CreatedDate: p.DateCreated(),
 	}
-	postPage.Meta = PageMeta{
-		Title: p.Title(),
-	}
-	postPage.PageHTML = p.SafeHTML()
-	postPage.CreatedDate = p.DateCreated()
 	//postPage.ModifiedDate = p.DateModified()
 
 	c.HTML(200, "post.html", postPage)
+}
+
+func createNewPostSlugHint(path *Page) string {
+	currSlug := path.Slug()
+	slugDir := filepath.Dir(currSlug)
+	if slugDir == "." {
+		slugDir = siteContent.Config.DefaultNewHint
+	}
+
+	today := time.Now().Format("2006-01-02")
+	hintSlug := filepath.Join(slugDir, today)
+	i := 1
+	for {
+		if _, ok := siteContent.SlugFileMap[hintSlug]; !ok {
+			break
+		}
+		i++
+		hintSlug = filepath.Join(slugDir, fmt.Sprintf("%s-%d", today, i))
+	}
+	return hintSlug
+}
+
+func renderDoesNotExistButMaybeCreate(c *gin.Context, path string) {
+	postPage := PostPage{
+		Site: SC,
+	}
+	postPage.Meta = PageMeta{
+		Title: "404 Not Found",
+	}
+	postPage.PageHTML = template.HTML(fmt.Sprintf(`
+<p>The page you are looking for does not exist.</p>
+<p><a href="/admin/edit?path=%s">Create it</a></p>`, path))
+
+	c.HTML(404, "post.html", postPage)
+
 }
 
 func (e editPageData) JSONString() string {

@@ -84,17 +84,8 @@
         <!-- Main Content -->
         <div :class="'mx-auto px-4 flex flex-col gap-6 ' + editorWidthOptions[editorWidth].containerClass + (!sidebarBelow ? ' lg:flex-row' : ' lg:flex-col')">
             <!-- Editor Area -->
-            <div class="flex-1">
+            <div class="flex-1 border-t border-solid border-gray-300">
                 <div id="richeditor" class="w-full richeditor"></div>
-{{/*                <textarea*/}}
-{{/*                    id="editorbox"*/}}
-{{/*                    v-model="content"*/}}
-{{/*                    @input="autoResize"*/}}
-{{/*                    ref="editor"*/}}
-{{/*                    class="w-full min-h-[600px] border-none p-0 text-sm lg:text-sm text-base leading-relaxed resize-none outline-none bg-transparent editorboxreal text-gray-800"*/}}
-{{/*                    :placeholder="editorPlaceholder">*/}}
-{{/*                </textarea>*/}}
-{{/*                <textarea class="editorboxreal" style="display:none;"></textarea>*/}}
 
             </div>
 
@@ -253,6 +244,17 @@
         });
 
 
+        function buildBreadCrumbNav() {
+            var data = defaultLoadedData.breadCrumbs || [{ name: 'Home', href: '/' }];
+            var navlinks = [];
+            data.forEach(function(item) {
+                var link = {};
+                link.name = item.title || item.text || item.name || 'undefined';
+                link.href = item.url || item.href || '#';
+                navlinks.push(link);
+            });
+            return navlinks;
+        }
 
 
         const { createApp } = Vue
@@ -278,8 +280,7 @@
                         search: true
                     },
                     navLinks: [
-                        { name: 'Home', href: '/' },
-                        // { name: 'Files', href: '/admin/files' },
+                        ...buildBreadCrumbNav()
                     ],
                     navigationItems: [
                         // { name: 'Dashboard', href: '/admin', emoji: '📊' },
