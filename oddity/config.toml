@@ -1,0 +1,14 @@
+[content]
+content_dir = 'content/content'
+static_dirs = ['content/static']
+addr = ':8081'
+default_new_hint = 'blog'
+sidecar_db = 'content/sqlite.db'
+admin_addr = ':8082'
+
+[site]
+title = 'Kalyan'
+navigation = [
+    {name = 'Home', url = '/'},
+    {name = 'About', url = '/about'}
+]

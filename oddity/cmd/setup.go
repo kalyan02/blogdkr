@@ -34,30 +34,14 @@ var newConfigCmd = &cobra.Command{
 	Short: "Generate default configuration file",
 	Long:  `Generates a default configuration file named config.yaml in the current directory.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		defaultConfig := config.NewConfig()
-		configData, err := defaultConfig.EncodeTOML()
-		if err != nil {
-			log.Fatalf("Failed to marshal default config: %v", err)
-		}
-
-		configFilePath := "config.toml"
-		if _, err := os.Stat(configFilePath); err == nil {
-			log.Fatalf("Config file %s already exists. Aborting to prevent overwrite.", configFilePath)
-		}
-
-		err = os.WriteFile(configFilePath, configData, 0644)
-		if err != nil {
-			log.Fatalf("Failed to write config file: %v", err)
-		}
-
-		fmt.Printf("Default configuration file created at %s\n", configFilePath)
+		config.GenerateDefault()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(setupCmd)
 	setupCmd.AddCommand(adminAuthCmd)
-	rootCmd.AddCommand(newConfigCmd)
+	setupCmd.AddCommand(newConfigCmd)
 }
 
 func runAdminAuthSetup(cmd *cobra.Command, args []string) {

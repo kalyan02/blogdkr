@@ -6,6 +6,8 @@ import (
 	"os"
 
 	toml "github.com/pelletier/go-toml/v2"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Config struct {
@@ -23,11 +25,31 @@ func (c Config) EncodeTOML() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func NewConfig() Config {
+func NewDefaultConfig() Config {
 	return Config{
 		Content: DefaultConfig,
 		Site:    DefaultSiteConfig,
 	}
+}
+
+func GenerateDefault() {
+	defaultConfig := NewDefaultConfig()
+	configData, err := defaultConfig.EncodeTOML()
+	if err != nil {
+		log.Fatalf("Failed to marshal default config: %v", err)
+	}
+
+	configFilePath := "config.toml"
+	if _, err := os.Stat(configFilePath); err == nil {
+		log.Fatalf("Config file %s already exists. Aborting to prevent overwrite.", configFilePath)
+	}
+
+	err = os.WriteFile(configFilePath, configData, 0644)
+	if err != nil {
+		log.Fatalf("Failed to write config file: %v", err)
+	}
+
+	fmt.Printf("Default configuration file created at %s\n", configFilePath)
 }
 
 func LoadConfigTOML(path string) (Config, error) {
