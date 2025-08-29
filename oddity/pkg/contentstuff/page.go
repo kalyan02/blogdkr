@@ -175,6 +175,14 @@ func (p *Page) DateModified() *time.Time {
 	return nil
 }
 
+// IsPrivate checks if the page is marked as private in frontmatter
+func (p *Page) IsPrivate() bool {
+	if p.File.ParsedContent != nil && p.File.ParsedContent.Frontmatter != nil {
+		return p.File.ParsedContent.Frontmatter.GetBool("private")
+	}
+	return false
+}
+
 func (p *Page) Dir() string {
 	d := path.Dir(p.File.FileName)
 	if d == "." {

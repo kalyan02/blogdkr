@@ -27,7 +27,7 @@
 <body class="font-mono bg-white min-h-screen">
     <!-- Navigation Bar -->
     <div class="py-1 border-b-0 border-gray-100">
-        <div class="max-w-4xl mx-auto px-2 pt-2 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
+        <div class="max-w-4xl mx-auto px-2 pb-2 pt-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 {{if .IsAuthenticated}} border-l-2 border-l-green-400{{end}}{{if .IsPrivate}} border-b-2 border-b-orange-400{{end}}">
             <!-- Left: Site Title -->
             <!--
             <div class="flex gap-1 flex-wrap justify-center lg:justify-start">
@@ -39,7 +39,7 @@
 
             <!-- Right: Navigation Links -->
             {{if or .Site.Navigation .NewPostHintSlug}}
-            <div class="flex gap-1 justify-center">
+            <div class="flex flex-wrap gap-1 justify-start lg:justify-center w-full lg:w-auto">
                 {{range .Site.Navigation}}
                 <a href="{{.URL}}" 
                    {{if .IsExternal}}target="_blank" rel="noopener noreferrer"{{end}}
@@ -47,13 +47,20 @@
                     {{.Name}}
                 </a>
                 {{end}}
-                {{ if .NewPostHintSlug }}
+                {{ if and .NewPostHintSlug .IsAuthenticated }}
                     <input type="text" value="/{{.NewPostHintSlug}}" id="new-post-hint"
-                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 cursor-pointer w-60" />
+                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 cursor-pointer w-full max-w-60 lg:w-60" />
 
                     <input type="button" value="Add"
                       onclick="location.href='/admin/edit?path=' + document.getElementById('new-post-hint').value"
                       class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer" />
+
+                    <a href="/auth" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+                        Auth
+                    </a>
+                    <a href="/auth/logout" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+                        Logout
+                    </a>
 
                 {{end}}
             </div>
@@ -115,10 +122,12 @@
                 
                 <!-- Share or edit links could go here -->
                 <div class="flex gap-2 text-xs">
+                    {{if .IsAuthenticated}}
                     {{if .EditURL}}
                     <a href="{{.EditURL}}" class="text-gray-600 hover:text-gray-900 px-2 py-1 border border-gray-300 rounded transition-colors">
                         Edit
                     </a>
+                    {{end}}
                     {{end}}
                 </div>
             </div>

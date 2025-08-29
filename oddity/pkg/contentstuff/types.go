@@ -40,7 +40,8 @@ type PostPage struct {
 	LinkedPages     []WikiLink `json:"linked_pages,omitempty"`
 	WordCount       int        `json:"word_count,omitempty"`
 	NewPostHintSlug string     `json:"new_post_hint_slug,omitempty"`
-	AdminLogged     bool       `json:"admin_logged,omitempty"`
+	IsAuthenticated bool       `json:"is_authenticated,omitempty"`
+	IsPrivate       bool       `json:"is_private,omitempty"`
 	ParentSlug      string     `json:"parent_slug,omitempty"`
 }
 

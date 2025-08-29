@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"oddity/pkg/authz"
 	"oddity/pkg/config"
 	"oddity/pkg/contentstuff"
 )
@@ -61,7 +62,7 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 		return
 	}
 
-	if IsAuthenticated(c) {
+	if authz.IsAuthenticated(c) {
 		renderDoesNotExistButMaybeCreate(c, requestPath)
 		return
 	}
@@ -96,7 +97,7 @@ func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.Navigation
 		parentSlug = "/" + parentSlug
 	}
 
-	if parentSlug == "/" || parentSlug == "index" || parentSlug == "blog" {
+	if parentSlug == "/" || parentSlug == "/index" || parentSlug == "/blog" {
 		return config.DefaultSiteConfig.Navigation
 	}
 
@@ -131,7 +132,7 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 		PageHTML:        page.SafeHTML(),
 		NewPostHintSlug: s.createNewPostSlugHint(page),
 		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
-		AdminLogged:     IsAuthenticated(c),
+		IsAuthenticated: authz.IsAuthenticated(c),
 	}
 
 	c.HTML(200, "post.html", indexPage)
@@ -148,7 +149,8 @@ func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 	postPage := contentstuff.PostPage{
 		Site:            sc,
 		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
-		AdminLogged:     IsAuthenticated(c),
+		IsAuthenticated: authz.IsAuthenticated(c),
+		IsPrivate:       page.IsPrivate(),
 		NewPostHintSlug: s.createNewPostSlugHint(page),
 		Meta: contentstuff.PageMeta{
 			Title: page.Title(),

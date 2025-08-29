@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"oddity/pkg/admin"
+	"oddity/pkg/authz"
 	"oddity/pkg/config"
 	"oddity/pkg/contentstuff"
 	"oddity/pkg/sitesrv"
@@ -64,8 +65,6 @@ func main() {
 
 	r := gin.Default()
 	r.LoadHTMLGlob("tmpl/*")
-	// auth middleware
-	r.Use(sitesrv.AuthMiddleware())
 
 	siteApp := &sitesrv.SiteApp{
 		SiteContent:    siteContent,
@@ -77,11 +76,22 @@ func main() {
 		WireController: wireController,
 	}
 
+	authzApp := &authz.AuthzApp{
+		SiteContent:    siteContent,
+		WireController: wireController,
+	}
+	authzApp.Init()
+
+	// auth middleware
+	r.Use(authzApp.AuthMiddleware())
+
 	adminGroup := r.Group("/admin")
+	adminGroup.Use(authzApp.RequireAuth())
 	adminGroup.GET("/edit", adminApp.HandleAdminEditor)
 	adminGroup.Any("/edit-data", adminApp.HandleEditPageData)
 
 	siteApp.RegisterRoutes(r)
+	authzApp.RegisterRoutes(r)
 
 	r.Run(":8081")
 }

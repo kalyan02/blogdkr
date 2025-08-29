@@ -91,13 +91,26 @@
     <div id="app">
         <!-- Navigation Bar -->
         <div class="py-1 border-b-0 border-gray-100">
-            <div :class="'mx-auto px-2 pt-2 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0 ' + editorWidthOptions[editorWidth].containerClass">
+            <div :class="'mx-auto px-2 pt-2 pb-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 ' + editorWidthOptions[editorWidth].containerClass">
                 <!-- Left: Navigation Links -->
                 <div class="flex gap-1 flex-wrap justify-center lg:justify-start" >
                     <a v-for="link in navLinks" :key="link.name" :href="link.href" :target="link.target"  v-if="!distractionFree"
                        class="text-gray-600 text-xs px-1 py-1 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors"
                        :class="{ 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white': link.primary }">
                         [[ link.name ]]
+                    </a>
+                    <span v-if="!distractionFree" class="text-xs text-gray-400 px-1 py-1 hidden lg:inline">|</span>
+                    <input  v-if="!distractionFree" type="text" value="/{{.NewPostHintSlug}}" id="new-post-hint"
+                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 cursor-pointer w-full max-w-60 lg:w-60" />
+
+                    <input  v-if="!distractionFree"  type="button" value="Add"
+                      onclick="location.href='/admin/edit?path=' + document.getElementById('new-post-hint').value"
+                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer" />
+                    <a  v-if="!distractionFree" href="/auth" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+                        Auth
+                    </a>
+                    <a  v-if="!distractionFree" href="/auth/logout" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+                        Logout
                     </a>
                 </div>
 
@@ -132,7 +145,7 @@
         <!-- Title Bar -->
         <div class="py-4">
             <div :class="'mx-auto px-4 ' + editorWidthOptions[editorWidth].containerClass">
-                <span class="text-lm text-gray-700">Editing: [[ currentFile ]]</span>
+                <span class="text-sm text-gray-500" :class="{ 'text-gray-200 hover:text-gray-500': distractionFree }">Editing: [[ currentFile ]]</span>
                 <span v-if="lastSaved" :key="lastSaved" class="text-xs text-gray-500 ml-4 animate-pulse-once">Last saved: [[ lastSaved ]]</span>
             </div>
         </div>
@@ -140,7 +153,7 @@
         <!-- Main Content -->
         <div :class="'mx-auto px-4 flex flex-col gap-6 ' + editorWidthOptions[editorWidth].containerClass + (!sidebarBelow ? ' lg:flex-row' : ' lg:flex-col')">
             <!-- Editor Area -->
-            <div class="flex-1 border-t border-solid border-gray-300">
+            <div class="flex-1 border-t border-solid" :class="{ 'border-gray-100': distractionFree, 'border-gray-300': !distractionFree }">
                 <div id="richeditor" class="w-full richeditor"></div>
 
             </div>
@@ -336,6 +349,14 @@
                     }
                 })
             }
+
+            // set hint
+            var hintInput = document.getElementById("new-post-hint");
+            if (hintInput !== undefined && defaultLoadedData.newPostHintSlug !== undefined)
+            {
+                hintInput.value = defaultLoadedData.newPostHintSlug;
+            }
+
         });
 
 

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -17,11 +18,12 @@ import (
 )
 
 type editPageData struct {
-	FullSlug    string                  `json:"fullSlug"`
-	Frontmatter string                  `json:"frontmatter"`
-	Content     string                  `json:"content"`
-	CurrentFile string                  `json:"currentFile"`
-	BreadCrumbs []contentstuff.LinkData `json:"breadCrumbs"`
+	FullSlug        string                  `json:"fullSlug"`
+	Frontmatter     string                  `json:"frontmatter"`
+	Content         string                  `json:"content"`
+	CurrentFile     string                  `json:"currentFile"`
+	BreadCrumbs     []contentstuff.LinkData `json:"breadCrumbs"`
+	NewPostHintSlug string                  `json:"newPostHintSlug,omitempty"`
 }
 
 type AdminApp struct {
@@ -302,8 +304,9 @@ func (s *AdminApp) buildEditPageDataResponse(path string) (editPageData, error) 
 	file, ok := s.SiteContent.DoPath(path)
 	if !ok {
 		defaultResponse := editPageData{
-			FullSlug:    path,
-			BreadCrumbs: buildBreadCrumbLinks(path),
+			FullSlug:        path,
+			BreadCrumbs:     buildBreadCrumbLinks(path),
+			NewPostHintSlug: s.createNewPostSlugHint(nil),
 		}
 
 		path = strings.Trim(path, "/")
@@ -328,11 +331,12 @@ func (s *AdminApp) buildEditPageDataResponse(path string) (editPageData, error) 
 	}
 	pg := contentstuff.NewPageFromFileDetail(&file)
 	data := editPageData{
-		FullSlug:    pg.Slug(),
-		Frontmatter: file.ParsedContent.Frontmatter.Raw,
-		Content:     string(pg.BodyWithTitle()),
-		CurrentFile: file.FileName,
-		BreadCrumbs: buildBreadCrumbLinks(pg.Slug()),
+		FullSlug:        pg.Slug(),
+		Frontmatter:     file.ParsedContent.Frontmatter.Raw,
+		Content:         string(pg.BodyWithTitle()),
+		CurrentFile:     file.FileName,
+		BreadCrumbs:     buildBreadCrumbLinks(pg.Slug()),
+		NewPostHintSlug: s.createNewPostSlugHint(pg),
 	}
 	return data, nil
 }
@@ -352,6 +356,33 @@ func (s *AdminApp) HandleAdminEditor(c *gin.Context) {
 	c.HTML(200, "edit.html", gin.H{
 		"Data": data.JSONString(),
 	})
+}
+
+func (s *AdminApp) createNewPostSlugHint(path *contentstuff.Page) string {
+	var slugDir string
+	if path == nil {
+		slugDir = s.SiteContent.Config.DefaultNewHint
+	} else {
+		slugDir = s.SiteContent.Config.DefaultNewHint
+		if path.Slug() != "" {
+			slugDir = filepath.Dir(path.Slug())
+		}
+	}
+	if slugDir == "." {
+		slugDir = s.SiteContent.Config.DefaultNewHint
+	}
+
+	today := time.Now().Format("2006-01-02")
+	hintSlug := filepath.Join(slugDir, today)
+	i := 1
+	for {
+		if _, ok := s.SiteContent.SlugFileMap[hintSlug]; !ok {
+			break
+		}
+		i++
+		hintSlug = filepath.Join(slugDir, fmt.Sprintf("%s-%d", today, i))
+	}
+	return hintSlug
 }
 
 func slugify(s string) string {
