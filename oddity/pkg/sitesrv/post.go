@@ -63,7 +63,7 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 	}
 
 	if authz.IsAuthenticated(c) {
-		renderDoesNotExistButMaybeCreate(c, requestPath)
+		render404ButMaybeCreate(c, requestPath)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (s *SiteApp) renderIndexAtPath(c *gin.Context, path string) {
 
 	// if none of those exist then show 404
 	defaultIndexPath := filepath.Join(path, "index")
-	renderDoesNotExistButMaybeCreate(c, defaultIndexPath)
+	render404ButMaybeCreate(c, defaultIndexPath)
 }
 
 func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.NavigationLink {
@@ -118,8 +118,11 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 		c.String(404, "Index Not Found")
 		return
 	}
-
 	page := contentstuff.NewPageFromFileDetail(&file)
+	if page.IsPrivate() && !authz.IsAuthenticated(c) {
+		render404(c)
+		return
+	}
 
 	sc := config.DefaultSiteConfig
 	sc.Navigation = s.buildPageNavLinks(page)
@@ -132,6 +135,7 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 		PageHTML:        page.SafeHTML(),
 		NewPostHintSlug: s.createNewPostSlugHint(page),
 		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
+		IsPrivate:       page.IsPrivate(),
 		IsAuthenticated: authz.IsAuthenticated(c),
 	}
 
@@ -142,6 +146,13 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 	// load the file content and render it
 	page := contentstuff.NewPageFromFileDetail(&file)
+
+	if !authz.IsAuthenticated(c) {
+		if contentstuff.IsPrivate(s.SiteContent, file) {
+			render404(c)
+			return
+		}
+	}
 
 	sc := config.DefaultSiteConfig
 	sc.Navigation = s.buildPageNavLinks(page)
@@ -183,7 +194,20 @@ func (s *SiteApp) createNewPostSlugHint(path *contentstuff.Page) string {
 	return hintSlug
 }
 
-func renderDoesNotExistButMaybeCreate(c *gin.Context, path string) {
+func render404(c *gin.Context) {
+	postPage := contentstuff.PostPage{
+		Site: config.DefaultSiteConfig,
+	}
+	postPage.Meta = contentstuff.PageMeta{
+		Title: "404 Not Found",
+	}
+	postPage.PageHTML = template.HTML("<p>The page you are looking for does not exist.</p>")
+
+	c.HTML(404, "post.html", postPage)
+
+}
+
+func render404ButMaybeCreate(c *gin.Context, path string) {
 	postPage := contentstuff.PostPage{
 		Site: config.DefaultSiteConfig,
 	}

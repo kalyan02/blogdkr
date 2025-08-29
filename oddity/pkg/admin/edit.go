@@ -24,6 +24,7 @@ type editPageData struct {
 	CurrentFile     string                  `json:"currentFile"`
 	BreadCrumbs     []contentstuff.LinkData `json:"breadCrumbs"`
 	NewPostHintSlug string                  `json:"newPostHintSlug,omitempty"`
+	IsPrivate       bool                    `json:"isPrivate,omitempty"`
 }
 
 type AdminApp struct {
@@ -301,17 +302,18 @@ func buildBreadCrumbLinks(path string) []contentstuff.LinkData {
 }
 
 func (s *AdminApp) buildEditPageDataResponse(path string) (editPageData, error) {
+	defaultFMRaw := `private: true
+`
 	file, ok := s.SiteContent.DoPath(path)
 	if !ok {
+		path = strings.Trim(path, "/")
 		defaultResponse := editPageData{
 			FullSlug:        path,
 			BreadCrumbs:     buildBreadCrumbLinks(path),
 			NewPostHintSlug: s.createNewPostSlugHint(nil),
+			Frontmatter:     defaultFMRaw,
+			Content:         fmt.Sprintf("# %s\n\nwrite...", filepath.Base(path)),
 		}
-
-		path = strings.Trim(path, "/")
-
-		defaultResponse.Content = fmt.Sprintf("# %s\n\nwrite...", filepath.Base(path))
 
 		if strings.HasSuffix(path, "index") || strings.HasSuffix(path, "index.md") {
 			if strings.Contains(path, "/") {
@@ -330,13 +332,19 @@ func (s *AdminApp) buildEditPageDataResponse(path string) (editPageData, error) 
 		return editPageData{}, fmt.Errorf("not editable file type")
 	}
 	pg := contentstuff.NewPageFromFileDetail(&file)
+
+	if file.ParsedContent != nil && file.ParsedContent.Frontmatter != nil {
+		defaultFMRaw = string(file.ParsedContent.Frontmatter.Raw)
+	}
+
 	data := editPageData{
 		FullSlug:        pg.Slug(),
-		Frontmatter:     file.ParsedContent.Frontmatter.Raw,
+		Frontmatter:     defaultFMRaw,
 		Content:         string(pg.BodyWithTitle()),
 		CurrentFile:     file.FileName,
 		BreadCrumbs:     buildBreadCrumbLinks(pg.Slug()),
 		NewPostHintSlug: s.createNewPostSlugHint(pg),
+		IsPrivate:       contentstuff.IsPrivate(s.SiteContent, file),
 	}
 	return data, nil
 }

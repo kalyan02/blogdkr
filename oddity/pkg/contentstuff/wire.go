@@ -190,7 +190,7 @@ func (w *Wire) watcherMatchesTrigger(watcher *QueryWatcher, trigger *WatchTrigge
 // NotifyFileChanged is called when a file changes
 func (w *Wire) NotifyFileChanged(filePath string) error {
 	// Look up file in content store
-	_, exists := w.content.DoPath(filePath)
+	fileCtx, exists := w.content.DoPath(filePath)
 	if !exists {
 		return fmt.Errorf("file not found in content store: %s", filePath)
 	}
@@ -199,7 +199,7 @@ func (w *Wire) NotifyFileChanged(filePath string) error {
 	if ok {
 		// the target file has queries - execute them
 		for _, query := range fileQueries {
-			if err := w.updateQuery(query); err != nil {
+			if err := w.updateQuery(&fileCtx, query); err != nil {
 				return fmt.Errorf("error updating query in %s: %v", query.FilePath, err)
 			}
 		}
@@ -208,35 +208,36 @@ func (w *Wire) NotifyFileChanged(filePath string) error {
 	return nil
 }
 
-// NotifyAll refreshes all queries that might be affected by the specified file change
-func (w *Wire) NotifyAll(modifiedFile string) error {
-	// Look up file in content store
-	fileDetail, exists := w.content.DoPath(modifiedFile)
-	if !exists {
-		return fmt.Errorf("file not found in content store: %s", modifiedFile)
-	}
-
-	// Find all queries that might be affected by this file change
-	affectedQueries := make([]QueryLocation, 0)
-
-	// Check all queries across all files
-	for _, queryList := range w.queries {
-		for _, query := range queryList {
-			if w.shouldRefreshQuery(query, modifiedFile, fileDetail) {
-				affectedQueries = append(affectedQueries, query)
-			}
-		}
-	}
-
-	// Update all affected queries
-	for _, query := range affectedQueries {
-		if err := w.updateQuery(query); err != nil {
-			return fmt.Errorf("error updating query in %s: %v", query.FilePath, err)
-		}
-	}
-
-	return nil
-}
+//
+//// NotifyAll refreshes all queries that might be affected by the specified file change
+//func (w *Wire) NotifyAll(modifiedFile string) error {
+//	// Look up file in content store
+//	fileDetail, exists := w.content.DoPath(modifiedFile)
+//	if !exists {
+//		return fmt.Errorf("file not found in content store: %s", modifiedFile)
+//	}
+//
+//	// Find all queries that might be affected by this file change
+//	affectedQueries := make([]QueryLocation, 0)
+//
+//	// Check all queries across all files
+//	for _, queryList := range w.queries {
+//		for _, query := range queryList {
+//			if w.shouldRefreshQuery(query, modifiedFile, fileDetail) {
+//				affectedQueries = append(affectedQueries, query)
+//			}
+//		}
+//	}
+//
+//	// Update all affected queries
+//	for _, query := range affectedQueries {
+//		if err := w.updateQuery(nil, query); err != nil {
+//			return fmt.Errorf("error updating query in %s: %v", query.FilePath, err)
+//		}
+//	}
+//
+//	return nil
+//}
 
 // shouldRefreshQuery determines if a query should be refreshed based on the modified file
 func (w *Wire) shouldRefreshQuery(query QueryLocation, modifiedFile string, fileDetail FileDetail) bool {
@@ -265,9 +266,9 @@ func (w *Wire) shouldRefreshQuery(query QueryLocation, modifiedFile string, file
 }
 
 // updateQuery re-executes a query and updates the file
-func (w *Wire) updateQuery(location QueryLocation) error {
+func (w *Wire) updateQuery(fileCtx *FileDetail, location QueryLocation) error {
 	// Execute the query to get new results
-	results, err := w.executeQuery(location.Query)
+	results, err := w.executeQuery(fileCtx, location.Query)
 	if err != nil {
 		return err
 	}
@@ -301,17 +302,17 @@ func (w *Wire) updateQuery(location QueryLocation) error {
 }
 
 // executeQuery runs a query against current content
-func (w *Wire) executeQuery(query *QueryAST) ([]string, error) {
+func (w *Wire) executeQuery(ctx *FileDetail, query *QueryAST) ([]string, error) {
 	switch query.Type {
 	case QueryPosts:
-		return w.executePostsQuery(query)
+		return w.executePostsQuery(ctx, query)
 	default:
 		return nil, fmt.Errorf("unsupported query type: %v", query.Type)
 	}
 }
 
 // executePostsQuery handles "posts" queries
-func (w *Wire) executePostsQuery(query *QueryAST) ([]string, error) {
+func (w *Wire) executePostsQuery(ctx *FileDetail, query *QueryAST) ([]string, error) {
 	// Get all posts (non-index markdown files)
 	var posts []FileDetail
 	var allFiles = w.content.AllFiles()
@@ -330,8 +331,10 @@ func (w *Wire) executePostsQuery(query *QueryAST) ([]string, error) {
 		}
 	}
 
+	allowed := w.applyAccessControl(ctx, posts, query)
+
 	// Apply filters
-	filtered := w.applyFiltersToFiles(posts, query.Filters)
+	filtered := w.applyFiltersToFiles(allowed, query.Filters)
 
 	// Apply sorting
 	sorted := w.applySortToFiles(filtered, query)
@@ -341,6 +344,42 @@ func (w *Wire) executePostsQuery(query *QueryAST) ([]string, error) {
 
 	// Convert to markdown format based on specified format
 	return w.formatResults(limited, query.MDFormat)
+}
+
+func (w *Wire) applyAccessControl(ctx *FileDetail, posts []FileDetail, query *QueryAST) []FileDetail {
+	// Rules:
+	// - If ctx is nil (no context), only public posts
+	// - If ctx is private, include private posts
+	// - If ctx is public, only public posts unless query.IncludePrivate is true
+	if ctx == nil {
+		panic("ctx is nil")
+	}
+
+	ctxPage := NewPageFromFileDetail(ctx)
+	isCtxPrivate := ctxPage.IsPrivate()
+
+	var filtered []FileDetail
+	for _, post := range posts {
+		postPage := NewPageFromFileDetail(&post)
+		isPostPrivate := postPage.IsPrivate()
+
+		if isCtxPrivate {
+			// Context is private, include all posts
+			filtered = append(filtered, post)
+		} else {
+			// Context is public
+			if !isPostPrivate {
+				// Post is public, include it
+				filtered = append(filtered, post)
+			} else if query.IncludePrivate {
+				// Post is private but query allows private, include it
+				filtered = append(filtered, post)
+			}
+			// Otherwise skip private posts
+		}
+	}
+
+	return filtered
 }
 
 // Helper functions for query execution

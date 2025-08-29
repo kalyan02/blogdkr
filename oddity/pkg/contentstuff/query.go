@@ -66,14 +66,15 @@ type QueryFilter struct {
 
 // QueryAST represents a parsed query with all its parameters
 type QueryAST struct {
-	Type         QueryType     `json:"type"`
-	Path         string        `json:"path,omitempty"` // path filter pattern
-	Sort         SortType      `json:"sort,omitempty"`
-	Order        SortOrder     `json:"order,omitempty"`
-	Limit        int           `json:"limit,omitempty"`
-	Filters      []QueryFilter `json:"filters,omitempty"`
-	HTMLTemplate string        `json:"html_template,omitempty"`
-	MDFormat     FormatType    `json:"md_format,omitempty"`
+	Type           QueryType     `json:"type"`
+	Path           string        `json:"path,omitempty"` // path filter pattern
+	Sort           SortType      `json:"sort,omitempty"`
+	Order          SortOrder     `json:"order,omitempty"`
+	Limit          int           `json:"limit,omitempty"`
+	Filters        []QueryFilter `json:"filters,omitempty"`
+	HTMLTemplate   string        `json:"html_template,omitempty"`
+	MDFormat       FormatType    `json:"md_format,omitempty"`
+	IncludePrivate bool          `json:"include_private,omitempty"`
 }
 
 // QueryXML represents the XML structure for parsing
@@ -88,6 +89,7 @@ type QueryXML struct {
 	MDFormat     string   `xml:"md-format,attr"`
 	Where        string   `xml:"where,attr"`
 	Tag          string   `xml:"tag,attr"`
+	Private      string   `xml:"private,attr"`
 }
 
 // ParseQuery parses a query string in XML format
@@ -132,6 +134,14 @@ func ParseQuery(queryString string) (*QueryAST, error) {
 		query.Sort = SortType(strings.ToLower(queryXML.Sort))
 	} else {
 		query.Sort = SortRecent // default
+	}
+
+	query.IncludePrivate = false
+	if queryXML.Private != "" {
+		switch strings.ToLower(queryXML.Private) {
+		case "true", "yes", "1", "include":
+			query.IncludePrivate = true
+		}
 	}
 
 	// Parse sort order

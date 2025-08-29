@@ -382,6 +382,7 @@
                     content: defaultLoadedData.content || '',
                     frontmatter: defaultLoadedData.frontmatter || '',
                     currentFile: defaultLoadedData.currentFile || 'untitled.md',
+                    isPrivate: defaultLoadedData.isPrivate || false,
                     lastSaved: null,
                     distractionFree: false,
                     sidebarVisible: true,
@@ -492,7 +493,8 @@ Start writing your content here. The editor is now centered with a fixed maximum
                                 fullSlug: defaultLoadedData.fullSlug,
                                 content: this.content,
                                 frontmatter: this.frontmatter,
-                                currentFile: this.currentFile
+                                currentFile: this.currentFile,
+                                isPrivate: this.isPrivate
                             })
                         });
 
