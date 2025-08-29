@@ -258,7 +258,7 @@ func (w *Wire) shouldRefreshQuery(query QueryLocation, modifiedFile string, file
 				return w.matchesPathPattern(modifiedFile, query.Query.Path)
 			}
 			// No path filter means all content files are relevant
-			return !strings.HasSuffix(modifiedFile, "index.md") && !strings.HasSuffix(modifiedFile, "_index.md")
+			return !strings.HasSuffix(modifiedFile, "index.md")
 		}
 	case QueryBacklinks:
 		// Backlinks queries should refresh when files with links change
@@ -322,8 +322,7 @@ func (w *Wire) executePostsQuery(query *QueryAST) ([]string, error) {
 	var posts []FileDetail
 	for _, file := range w.content.FileName {
 		if (file.FileType == FileTypeMarkdown || file.FileType == FileTypeHTML) &&
-			!strings.HasSuffix(file.FileName, "index.md") &&
-			!strings.HasSuffix(file.FileName, "_index.md") {
+			!strings.HasSuffix(file.FileName, "index.md") {
 
 			// Apply path filtering if specified
 			if query.Path != "" {

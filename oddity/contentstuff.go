@@ -241,7 +241,6 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 		indexPaths := []string{
 			filepath.Join(targetFileDir, "index.md"),
 			filepath.Join(targetFileDir, "index.html"),
-			filepath.Join(targetFileDir, "_index.md"),
 		}
 		for _, ip := range indexPaths {
 			if _, err := os.Stat(ip); err == nil {

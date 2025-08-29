@@ -19,11 +19,13 @@ type Config struct {
 	ThemeDir       string
 	Port           int
 	DefaultNewHint string
+	SidecarDB      string
 }
 
 var DefaultConfig = Config{
 	ContentDir:     "content/content",
 	StaticDirs:     []string{"content/static"},
+	SidecarDB:      "content/sqlite.db",
 	DefaultNewHint: "blog",
 	Port:           8081,
 }
@@ -74,7 +76,7 @@ func main() {
 
 	// notify all index files
 	for fname := range siteContent.FileName {
-		if strings.HasSuffix(fname, "index.md") || strings.HasSuffix(fname, "index.html") || strings.HasSuffix(fname, "_index.md") {
+		if strings.HasSuffix(fname, "index.md") || strings.HasSuffix(fname, "index.html") {
 			err = wireController.NotifyFileChanged(fname)
 			if err != nil {
 				log.Errorf("error notifying file changed: %v", err)
@@ -183,7 +185,6 @@ func handleAllContentPages(c *gin.Context) {
 
 func renderIndexAtPath(c *gin.Context, path string) {
 	potentialIdxFiles := []string{
-		filepath.Join(path, "_index.md"),
 		filepath.Join(path, "index.md"),
 		filepath.Join(path, "index.html"),
 	}
@@ -211,8 +212,7 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 		if f.FileType == FileTypeMarkdown || f.FileType == FileTypeHTML {
 			if filepath.Dir(f.FileName) == filepath.Dir(file.FileName) &&
 				!strings.HasSuffix(f.FileName, "index.md") &&
-				!strings.HasSuffix(f.FileName, "index.html") &&
-				!strings.HasSuffix(f.FileName, "_index.md") {
+				!strings.HasSuffix(f.FileName, "index.html") {
 				posts = append(posts, f)
 			}
 		}

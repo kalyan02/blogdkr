@@ -153,8 +153,7 @@ func (qr *QueryRenderer) executePostsQueryForSection(section *QuerySection) erro
 	var posts []FileDetail
 	for _, file := range qr.content.FileName {
 		if (file.FileType == FileTypeMarkdown || file.FileType == FileTypeHTML) &&
-			!strings.HasSuffix(file.FileName, "index.md") &&
-			!strings.HasSuffix(file.FileName, "_index.md") {
+			!strings.HasSuffix(file.FileName, "index.md") {
 			posts = append(posts, file)
 		}
 	}

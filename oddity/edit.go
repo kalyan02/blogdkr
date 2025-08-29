@@ -137,7 +137,7 @@ func buildBreadCrumbLinks(path string) []LinkData {
 	})
 
 	for i := range parts {
-		if parts[i] == "" || parts[i] == "index" || parts[i] == "index.md" || parts[i] == "_index.md" || parts[i] == "_index" {
+		if parts[i] == "" || parts[i] == "index" || parts[i] == "index.md" {
 			continue
 		}
 
