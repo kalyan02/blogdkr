@@ -1,21 +1,26 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 type ContentStuff struct {
 	FileName    map[string]FileDetail
 	SlugFileMap map[string]FileDetail
 	Config      Config
+	DBHandle    *gorm.DB
 }
 
 func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
@@ -37,12 +42,90 @@ func NewContentStuff(config Config) *ContentStuff {
 }
 
 func (c *ContentStuff) LoadContent() error {
-	// traverse the directory c.Config.ContentDir
-	err := filepath.Walk(c.Config.ContentDir, c.scanContentPath)
+	// DB Connect
+	db, err := sqliteConnect(c.Config.SidecarDB)
 	if err != nil {
-		return err
+		return fmt.Errorf("error connecting to sqlite db: %v", err)
+	}
+	c.DBHandle = db
+
+	err = c.DBHandle.AutoMigrate(&PostHistory{})
+	if err != nil {
+		return fmt.Errorf("error migrating sqlite db: %v", err)
 	}
 
+	// traverse the directory c.Config.ContentDir
+	err = filepath.Walk(c.Config.ContentDir, c.scanContentPath)
+	if err != nil {
+		return fmt.Errorf("error walking content dir: %v", err)
+	}
+
+	err2 := c.initializeDBHistory()
+	if err2 != nil {
+		return err2
+	}
+
+	return nil
+}
+
+func (c *ContentStuff) initializeDBHistory() error {
+	// now load from db and create records there if not exists
+	var fds []PostHistory
+	result := c.DBHandle.Find(&fds)
+	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("error loading file details from db: %v", result.Error)
+	}
+
+	var needsCreate []FileDetail
+	var existingSlugs = map[string]bool{}
+	for _, ph := range fds {
+		existingSlugs[ph.FileName] = true
+		existingSlugs[ph.FullSlug] = true
+	}
+	for _, fd := range c.FileName {
+		if fd.FileType == FileTypeDirectory {
+			continue
+		}
+		need := true
+		if _, ok := existingSlugs[fd.FileName]; ok {
+			need = false
+		} else if _, ok := existingSlugs[NewPageFromFileDetail(&fd).Slug()]; ok {
+			need = false
+		}
+
+		if need {
+			needsCreate = append(needsCreate, fd)
+		}
+	}
+
+	// create records for needsCreate
+	logrus.Infof("Creating %d post history records", len(needsCreate))
+	for _, fd := range needsCreate {
+		if fd.FileType == FileTypeDirectory {
+			continue
+		}
+		pg := NewPageFromFileDetail(&fd)
+		if fd.ParsedContent == nil {
+			panic(fmt.Sprintf("parsed content is nil for %s", fd.FileName))
+		}
+		rawContent, err := fd.ParsedContent.ToMarkdown()
+		if err != nil {
+			logrus.Errorf("error converting to markdown for %s: %v", fd.FileName, err)
+			continue
+		}
+		ph := PostHistory{
+			FileName: fd.FileName,
+			FullSlug: pg.Slug(),
+			Title:    pg.Title(),
+			HTML:     string(fd.ParsedContent.HTML),
+			Content:  rawContent,
+		}
+		if err := c.DBHandle.Create(&ph).Error; err != nil {
+			logrus.Errorf("error creating post history for %s: %v", ph.FullSlug, err)
+		} else {
+			logrus.Infof("created post history for %s", ph.FullSlug)
+		}
+	}
 	return nil
 }
 
@@ -183,6 +266,76 @@ func (c *ContentStuff) scanContentPath(path string, info fs.FileInfo, err error)
 	return nil
 }
 
+func (c *ContentStuff) GetHistory(path string) []PostHistory {
+	var histories []PostHistory
+	result := c.DBHandle.Where("file_name = ? or full_slug = ?", path, path).Order("created DESC").Find(&histories)
+	if result.Error != nil {
+		logrus.Errorf("error getting history for %s: %v", path, result.Error)
+		return nil
+	}
+	return histories
+}
+
+func (c *ContentStuff) PersistHistory() error { return nil }
+
+// WriteFile will simply create folders and write the file and is not content dir aware
+func (c *ContentStuff) WriteFile(targetFile string, content string) error {
+	targetFileDir := filepath.Dir(targetFile)
+	if _, err := os.Stat(targetFileDir); os.IsNotExist(err) {
+		err = os.MkdirAll(targetFileDir, 0755)
+		if err != nil {
+			return fmt.Errorf("error creating directory: %v", err)
+		}
+	}
+
+	err := os.WriteFile(targetFile, []byte(content), 0644)
+	if err != nil {
+		return fmt.Errorf("error writing file: %v", err)
+	}
+
+	return nil
+}
+
+func (c *ContentStuff) ReadContentFile(fileName string) (string, error) {
+	targetFile := filepath.Join(c.Config.ContentDir, fileName)
+	content, err := os.ReadFile(targetFile)
+	if err != nil {
+		return "", fmt.Errorf("error reading file: %v", err)
+	}
+	return string(content), nil
+}
+
+// WriteContentFile will resolve the content path to the directory before writing
+func (c *ContentStuff) WriteContentFile(fileName string, content string) error {
+	targetFile := filepath.Join(c.Config.ContentDir, fileName)
+
+	c.WriteContentFileHistory(fileName, content)
+
+	return c.WriteFile(targetFile, content)
+}
+
+func (c *ContentStuff) WriteContentFileHistory(fileName string, content string) {
+	if strings.HasSuffix(fileName, ".md") {
+		if fd, ok := c.DoPath(fileName); ok {
+			pg := NewPageFromFileDetail(&fd)
+			if pg != nil && pg.File.ParsedContent != nil {
+				ph := PostHistory{
+					FileName: fileName,
+					FullSlug: pg.Slug(),
+					Title:    pg.Title(),
+					HTML:     string(pg.File.ParsedContent.HTML),
+					Content:  content,
+				}
+				if err := c.DBHandle.Create(&ph).Error; err != nil {
+					logrus.Errorf("error creating post history for %s: %v", ph.FullSlug, err)
+				} else {
+					logrus.Infof("created post history for %s", ph.FullSlug)
+				}
+			}
+		}
+	}
+}
+
 type FileType int
 
 const (
@@ -213,15 +366,7 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 
 		targetFile := filepath.Join(cfg.ContentDir, fd.FileName)
 
-		targetFileDir := filepath.Dir(targetFile)
-		if _, err := os.Stat(targetFileDir); os.IsNotExist(err) {
-			err = os.MkdirAll(targetFileDir, 0755)
-			if err != nil {
-				return fmt.Errorf("error creating directory: %v", err)
-			}
-		}
-
-		err = os.WriteFile(targetFile, []byte(content), 0644)
+		err = siteContent.WriteContentFile(fd.FileName, content)
 		if err != nil {
 			return fmt.Errorf("error writing file: %v", err)
 		}
@@ -238,6 +383,7 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 			return fmt.Errorf("error refreshing content: %v", err)
 		}
 
+		targetFileDir := filepath.Dir(targetFile)
 		indexPaths := []string{
 			filepath.Join(targetFileDir, "index.md"),
 			filepath.Join(targetFileDir, "index.html"),
@@ -248,6 +394,14 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 				if err != nil {
 					logrus.Errorf("error getting relative path for %s: %v", ip, err)
 					continue
+				}
+				err = siteContent.RefreshContent(relativeIP)
+				if err != nil {
+					logrus.Errorf("error refreshing content for %s: %v", ip, err)
+				}
+				err = wireController.ScanContentFileForQueries(relativeIP)
+				if err != nil {
+					logrus.Errorf("error scanning content file for queries %s: %v", ip, err)
 				}
 				err = wireController.NotifyFileChanged(relativeIP)
 				if err != nil {
@@ -265,11 +419,30 @@ func SaveFileDetail(cfg *Config, fd *FileDetail) error {
 
 	if fd.FileType == FileTypeHTML {
 		// just write body
-		err := os.WriteFile(filepath.Join(cfg.ContentDir, fd.FileName), []byte(fd.ParsedContent.HTML), 0644)
+		err := siteContent.WriteContentFile(fd.FileName, string(fd.ParsedContent.HTML))
 		if err != nil {
 			return fmt.Errorf("error writing file: %v", err)
 		}
 	}
 
 	return nil
+}
+
+type PostHistory struct {
+	ID       int64     `gorm:"primaryKey;autoIncrement:true"`
+	FileName string    `gorm:"index;not null"`
+	FullSlug string    `gorm:"index;not null"`
+	Title    string    `gorm:"text"`
+	Content  string    `gorm:"text"`
+	HTML     string    `gorm:"text"`
+	Created  time.Time `gorm:"autoCreateTime"`
+	Updated  time.Time `gorm:"autoUpdateTime"`
+}
+
+func sqliteConnect(name string) (db *gorm.DB, err error) {
+	db, err = gorm.Open(sqlite.Open(name), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }

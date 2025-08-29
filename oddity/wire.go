@@ -74,6 +74,32 @@ func (w *Wire) ScanForQueries() error {
 	return nil
 }
 
+func (w *Wire) ScanContentFileForQueries(filePath string) error {
+	fileDetail, exists := w.content.FileName[filePath]
+	if !exists {
+		return fmt.Errorf("file not found in content store: %s", filePath)
+	}
+
+	if fileDetail.FileType != FileTypeMarkdown && fileDetail.FileType != FileTypeHTML {
+		// Not a content file we care about
+		return nil
+	}
+
+	queries, err := w.extractQueriesFromFile(filePath)
+	if err != nil {
+		return fmt.Errorf("error scanning %s: %v", filePath, err)
+	}
+
+	if len(queries) > 0 {
+		w.queries[filePath] = queries
+	} else {
+		if _, exists := w.queries[filePath]; exists {
+			delete(w.queries, filePath)
+		}
+	}
+	return nil
+}
+
 // extractQueriesFromFile finds all query comments in a file
 func (w *Wire) extractQueriesFromFile(filePath string) ([]QueryLocation, error) {
 	fullPath := filepath.Join(w.content.Config.ContentDir, filePath)
@@ -82,47 +108,7 @@ func (w *Wire) extractQueriesFromFile(filePath string) ([]QueryLocation, error) 
 		return nil, err
 	}
 
-	lines := strings.Split(string(content), "\n")
-	queries := make([]QueryLocation, 0)
-
-	// Updated regex for XML-like syntax
-	queryStartRegex := regexp.MustCompile(`<!--\s*<query\s+([^>]+)>\s*-->`)
-	queryEndRegex := regexp.MustCompile(`<!--\s*</query>\s*-->`)
-
-	var currentQuery *QueryLocation
-
-	for i, line := range lines {
-		// Look for start of query
-		if matches := queryStartRegex.FindStringSubmatch(line); len(matches) > 1 {
-			// Store raw query string, don't parse yet
-			currentQuery = &QueryLocation{
-				Query:     nil, // Will be set when we find the end tag
-				StartLine: i,
-				FilePath:  filePath,
-				Content:   make([]string, 0),
-				rawQuery:  matches[1], // Store raw query attributes
-			}
-		} else if queryEndRegex.MatchString(line) && currentQuery != nil {
-			// End of query found - now parse the complete query
-			xmlString := fmt.Sprintf("<query %s>", currentQuery.rawQuery)
-			ast, err := ParseQuery(xmlString)
-			if err != nil {
-				// Skip invalid queries
-				currentQuery = nil
-				continue
-			}
-
-			currentQuery.Query = ast
-			currentQuery.EndLine = i
-			queries = append(queries, *currentQuery)
-			currentQuery = nil
-		} else if currentQuery != nil {
-			// Inside a query block - this is generated content
-			currentQuery.Content = append(currentQuery.Content, line)
-		}
-	}
-
-	return queries, nil
+	return w.extractQueriesFromContent(filePath, string(content))
 }
 
 // extractQueriesFromContent extracts queries from content string (for testing)
@@ -301,7 +287,7 @@ func (w *Wire) updateQuery(location QueryLocation) error {
 
 	// Write back to file
 	newContent := strings.Join(newLines, "\n")
-	return os.WriteFile(fullPath, []byte(newContent), 0644)
+	return siteContent.WriteContentFile(location.FilePath, newContent)
 }
 
 // executeQuery runs a query against current content
@@ -309,8 +295,6 @@ func (w *Wire) executeQuery(query *QueryAST) ([]string, error) {
 	switch query.Type {
 	case QueryPosts:
 		return w.executePostsQuery(query)
-	case QueryBacklinks:
-		return w.executeBacklinksQuery(query)
 	default:
 		return nil, fmt.Errorf("unsupported query type: %v", query.Type)
 	}
@@ -442,6 +426,8 @@ func (w *Wire) formatResults(files []FileDetail, format FormatType) ([]string, e
 		page := NewPageFromFileDetail(&file)
 		title := page.Title()
 		slug := page.Slug()
+
+		slug = "/" + strings.TrimPrefix(slug, "/")
 		date := page.DateCreated().Format("2006-01-02")
 
 		switch format {

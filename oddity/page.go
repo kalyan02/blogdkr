@@ -26,7 +26,7 @@ func NewPageFromFileDetail(f *FileDetail) *Page {
 func (p *Page) Title() string {
 	firstL1 := ""
 
-	if len(p.File.ParsedContent.Title) > 0 {
+	if p.File.ParsedContent != nil && len(p.File.ParsedContent.Title) > 0 {
 		firstL1 = p.File.ParsedContent.Title
 	}
 
@@ -37,7 +37,7 @@ func (p *Page) Title() string {
 		}
 	}
 
-	// use filename (wihtout dir and extension) as title if no h1 or frontmatter title
+	// use filename (without dir and extension) as title if no h1 or frontmatter title
 	if firstL1 == "" {
 		base := filepath.Base(p.File.FileName)
 		firstL1 = strings.TrimSuffix(base, filepath.Ext(base))

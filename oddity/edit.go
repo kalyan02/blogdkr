@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"html"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/sirupsen/logrus"
 )
 
@@ -99,6 +102,28 @@ func handleEditPageData(c *gin.Context) {
 			return
 		}
 
+		//err = siteContent.RefreshContent(file.FileName)
+		//if err != nil {
+		//	logrus.Errorf("error refreshing content for %s: %v", file.FileName, err)
+		//}
+
+		// if this is index.md in a directory, refresh queries and perform edits
+		//if strings.HasSuffix(file.FileName, "index.md") {
+		//	err = wireController.ScanContentFileForQueries(file.FileName)
+		//	if err != nil {
+		//		logrus.Errorf("error scanning content file for queries: %v", err)
+		//	}
+		//
+		//	err = wireController.NotifyFileChanged(file.FileName)
+		//	if err != nil {
+		//		logrus.Errorf("error notifying file changed: %v", err)
+		//	}
+		//	err = siteContent.RefreshContent(file.FileName)
+		//	if err != nil {
+		//		logrus.Errorf("error refreshing content for %s: %v", file.FileName, err)
+		//	}
+		//}
+
 		data, err := buildEditPageDataResponse(file.FileName)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("error building response: %v", err)})
@@ -106,6 +131,64 @@ func handleEditPageData(c *gin.Context) {
 		}
 		c.JSON(200, data)
 		return
+	}
+
+	if c.Request.Method == "GET" {
+		path := c.Query("path")
+		action := c.Query("action")
+		if path != "" && action == "history" {
+			histFiles := siteContent.GetHistory(path)
+
+			type histReponse struct {
+				Title        string `json:"title"`
+				Body         string `json:"body"`
+				CreatedAt    string `json:"createdAt"`
+				DiffText     string `json:"diffText,omitempty"`
+				DiffHTML     string `json:"diffHTML,omitempty"`
+				DeltaSummary string `json:"deltaSummary,omitempty"` // e.g. +10/-2
+			}
+			var histResponses []histReponse
+
+			for i, hf := range histFiles {
+				if i >= 20 {
+					break
+				}
+				mdParser := NewMarkdownParser(DefaultParserConfig())
+				_, body, err := mdParser.ExtractFrontmatter([]byte(hf.Content))
+				if err != nil {
+					continue
+				}
+
+				histResponses = append(histResponses, histReponse{
+					Title: hf.Title,
+					Body:  string(body),
+
+					CreatedAt: hf.Created.Format("2006-01-02 15:04:05"),
+				})
+			}
+
+			// build diffs now
+			for i := 1; i < len(histResponses); i++ {
+				curr := histResponses[i-1]
+				prev := histResponses[i]
+				diffHTML, inserts, deletes := buildDiffToDeltaHTML(prev.Body, curr.Body)
+				histResponses[i-1].DiffHTML = diffHTML
+
+				var insertClass = "summary-inserts"
+				var deleteClass = "summary-deletes"
+				if inserts == 0 {
+					insertClass = "summary-grey"
+				}
+				if deletes == 0 {
+					deleteClass = "summary-grey"
+				}
+
+				histResponses[i-1].DeltaSummary = fmt.Sprintf("<span class='%s'>+%d</span>/<span class='%s'>-%d</span>", insertClass, inserts, deleteClass, deletes)
+			}
+
+			c.JSON(200, gin.H{"history": histResponses})
+			return
+		}
 	}
 
 	if c.Request.Method == "GET" {
@@ -124,6 +207,58 @@ func handleEditPageData(c *gin.Context) {
 		c.JSON(200, data)
 		return
 	}
+}
+
+func buildDiffToDeltaHTML(text1, text2 string) (string, int, int) {
+	var text bytes.Buffer
+	text.WriteString(`<div class="diff">`)
+	insertCount := 0
+	deleteCount := 0
+
+	dmp := diffmatchpatch.New()
+	t1, t2, tt := dmp.DiffLinesToChars(text1, text2)
+	diffs := dmp.DiffMain(t1, t2, false)
+	diffs = dmp.DiffCharsToLines(diffs, tt)
+
+	for _, d := range diffs {
+
+		textLines := strings.Split(d.Text, "\n")
+		startTag := ""
+		endTag := ""
+
+		switch d.Type {
+		case diffmatchpatch.DiffInsert:
+			startTag = `<span class="diff-insert">`
+			endTag = "</span>"
+			insertCount += len(textLines)
+		case diffmatchpatch.DiffDelete:
+			startTag = `<span class="diff-delete">`
+			endTag = "</span>"
+			deleteCount += len(textLines)
+		case diffmatchpatch.DiffEqual:
+			startTag = `<span class="diff-equal">`
+			endTag = "</span>"
+		}
+
+		for i, line := range textLines {
+			if line == "" && i == len(textLines)-1 {
+				continue
+			}
+			text.WriteString(startTag)
+			if line == "" {
+				line = " "
+			}
+			line = strings.ReplaceAll(line, "\t", "     ")
+			escapedLine := html.EscapeString(line)
+			//escapedLine := strings.ReplaceAll(line, " ", "&nbsp;")
+			text.WriteString(escapedLine)
+			text.WriteString(endTag)
+		}
+
+	}
+	text.WriteString(`</div>`)
+	textString := text.String()
+	return textString, insertCount, deleteCount
 }
 
 func buildBreadCrumbLinks(path string) []LinkData {

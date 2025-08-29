@@ -55,6 +55,7 @@ type PostPage struct {
 	WordCount       int        `json:"word_count,omitempty"`
 	NewPostHintSlug string     `json:"new_post_hint_slug,omitempty"`
 	AdminLogged     bool       `json:"admin_logged,omitempty"`
+	ParentSlug      string     `json:"parent_slug,omitempty"`
 }
 
 // IndexPage represents the data structure for rendering the main blog index

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"net/url"
 	"path"
 	"regexp"
 	"strings"
@@ -70,7 +69,13 @@ func DefaultParserConfig() *ParserConfig {
 		SmartypantsFractions: false,
 
 		WikiLinkRenderer: func(linkText string) string {
-			return fmt.Sprintf(`<a href="%s">%s</a>`, url.PathEscape(linkText), linkText)
+			// allow setting title with pipe syntax [[link-slug|Display Text]]
+			parts := strings.SplitN(linkText, "|", 2)
+			if len(parts) == 2 {
+				return fmt.Sprintf(`<a href="%s">%s</a>`, parts[0], parts[1])
+			}
+
+			return fmt.Sprintf(`<a href="%s">%s</a>`, linkText, linkText)
 		},
 		ShortcodeRenderer: func(name string) string {
 			switch name {
@@ -98,10 +103,12 @@ type ParsedContent struct {
 	Shortcodes  []ShortcodeData
 	Headings    []HeadingData
 	Title       string
-
-	HTML []byte
+	HTML        []byte
 }
 
+// ToMarkdown reconstructs the markdown content from parsed parts
+// it includes frontmatter and title if available along with body
+// it should produce markdown very close to the original input
 func (pc *ParsedContent) ToMarkdown() (string, error) {
 	// marshal frontmatter first
 	parts := make([]string, 0, 3)
@@ -803,17 +810,3 @@ func (fm *FrontmatterData) Marshal() (string, error) {
 		return "", nil
 	}
 }
-
-// renderHtml updates a Page with parsed HTML content
-//func (p *Page) renderHtml() {
-//	mdParser := NewMarkdownParser(DefaultParserConfig())
-//	content, err := mdParser.Parse(p.Body)
-//	if err != nil || content == nil {
-//		// For backwards compatibility, continue with basic parsing on error
-//		p.HTML = "error rendering"
-//		return
-//	}
-//
-//	p.HTML = template.HTML(content.HTML)
-//	p.Hashtags = content.Hashtags
-//}

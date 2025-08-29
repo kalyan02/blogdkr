@@ -30,6 +30,62 @@
             }
         }
     </script>
+    <style>
+        /* Diff HTML styling */
+        .diff {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 8px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        
+        .diff-item {
+            display: block;
+        }
+        
+        .diff-insert {
+            background-color: #d4edda;
+            color: #155724;
+            border-left: 3px solid #28a745;
+            padding-left: 4px;
+            margin: 0px 0;
+            display: block;
+        }
+        
+        .diff-delete {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left: 3px solid #dc3545;
+            padding-left: 4px;
+            margin: 0px 0;
+            display: block;
+        }
+        
+        .diff-equal {
+            color: #6c757d;
+            display: block;
+            margin: 0px 0;
+            padding-left: 4px;
+        }
+
+        .summary-gray {
+            color: #6c757d;
+            font-weight: bold;
+        }
+        .summary-inserts {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .summary-deletes {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body class="font-mono bg-white min-h-screen">
     <div id="app">
@@ -182,6 +238,8 @@
                     </div>
                 </div>
 
+
+
                 <!-- Page Search Section -->
                 <div class="mb-6">
                     <h3 @click="toggleSection('search')" 
@@ -202,6 +260,41 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- History Diffs Section -->
+                <div class="mb-6">
+                    <h3 @click="toggleSection('history')" 
+                        class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
+                        History
+                        <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.history }">▼</span>
+                    </h3>
+                    <div v-show="sections.history">
+                        <div v-if="historyLoading" class="text-xs text-gray-500 p-2">Loading history...</div>
+                        <div v-else-if="historyError" class="text-xs text-red-500 p-2">[[ historyError ]]</div>
+                        <div v-else-if="history.length === 0" class="text-xs text-gray-500 p-2">No history available</div>
+                        <div v-else class="space-y-2">
+                            <div v-for="(item, index) in history" :key="index" class="border border-gray-200 rounded">
+                                <div @click="toggleHistoryItem(index)" 
+                                     class="p-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between">
+                                    <div class="flex-1">
+                                        <div class="text-xs font-medium text-gray-800">[[ item.title || 'Change' ]]</div>
+                                        <div class="text-xs text-gray-500 mt-1">
+                                            [[ formatDate(item.createdAt) ]]
+                                            <span v-if="item.deltaSummary" class="ml-2" v-html="item.deltaSummary"></span>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs text-gray-400 transition-transform" 
+                                          :class="{ 'rotate-180': item.expanded }">▼</span>
+                                </div>
+                                <div v-show="item.expanded" class="border-t border-gray-200 p-3 bg-gray-50">
+                                    <div v-if="item.diffHTML" v-html="item.diffHTML" class="text-xs font-mono overflow-x-auto"></div>
+                                    <div v-else class="text-xs text-gray-500">No diff available</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
 
             </div>
         </div>
@@ -225,17 +318,19 @@
         var defaultLoadedData = tryJSON("{{.Data}}", {});
 
 
+        var editor = null;
         // document on load
         document.addEventListener("DOMContentLoaded", function() {
             // Create a single editor
             const OT = window.OverType.default || window.OverType;
             if(document.getElementsByClassName("richeditor").length > 0) {
                 // document.getElementsByClassName("editorboxreal")[0].style.display = 'none';
-                const editor = new OT(".richeditor", {
+                editor = new OT(".richeditor", {
                     value: defaultLoadedData.content || '',
                     theme: "light",
                     autoResize: true,
                     fontSize: '14px',
+                    minHeight: '600px',
                     onChange: (value) => {
                         app.content = value;
                     }
@@ -277,7 +372,8 @@
                         navigation: true,
                         frontmatter: true,
                         fileupload: true,
-                        search: true
+                        search: true,
+                        history: false
                     },
                     navLinks: [
                         ...buildBreadCrumbNav()
@@ -318,7 +414,10 @@
                             icon: 'L',
                             containerClass: 'max-w-none'
                         }
-                    }
+                    },
+                    history: [],
+                    historyLoading: false,
+                    historyError: null
                 }
             },
             computed: {
@@ -397,6 +496,11 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 toggleSection(section) {
                     this.sections[section] = !this.sections[section]
                     this.saveSectionStates();
+                    
+                    // Load history when history section is opened
+                    if (section === 'history' && this.sections.history && this.history.length === 0) {
+                        this.loadHistory();
+                    }
                 },
                 autoResize(event) {
                     console.log("Auto resizing editor")
@@ -484,10 +588,11 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     this.insertAtCursor(link)
                 },
                 insertAtCursor(text) {
-                    const textarea = this.$refs.editor
+                    const textarea = document.getElementsByClassName("overtype-input")[0];
                     const start = textarea.selectionStart
                     const end = textarea.selectionEnd
-                    this.content = this.content.substring(0, start) + text + this.content.substring(end)
+                    
+                    textarea.value = this.content.substring(0, start) + text + this.content.substring(end)
                     this.$nextTick(() => {
                         textarea.focus()
                         textarea.setSelectionRange(start + text.length, start + text.length)
@@ -495,6 +600,48 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 performSearch() {
                     console.log('Searching for:', this.searchQuery)
+                },
+                async loadHistory() {
+                    if (!defaultLoadedData.fullSlug) {
+                        console.warn('No fullSlug available for history loading');
+                        return;
+                    }
+
+                    this.historyLoading = true;
+                    this.historyError = null;
+
+                    try {
+                        const response = await fetch(`/admin/edit-data?path=${encodeURIComponent(defaultLoadedData.fullSlug)}&action=history`);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+                        this.history = (data.history || []).map(item => ({
+                            ...item,
+                            expanded: false
+                        }));
+                    } catch (error) {
+                        console.error('Error loading history:', error);
+                        this.historyError = 'Failed to load history: ' + error.message;
+                    } finally {
+                        this.historyLoading = false;
+                    }
+                },
+                toggleHistoryItem(index) {
+                    if (this.history[index]) {
+                        this.history[index].expanded = !this.history[index].expanded;
+                    }
+                },
+                formatDate(dateString) {
+                    if (!dateString) return 'Unknown date';
+                    try {
+                        const date = new Date(dateString);
+                        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                    } catch (e) {
+                        return dateString;
+                    }
                 },
                                 // State persistence helpers
                 saveSidebarState() {
@@ -567,6 +714,11 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     console.log("Mounted, resizing editor")
                     if (this.$refs.editor) {
                         this.autoResize({ target: this.$refs.editor })
+                    }
+                    
+                    // Auto-load history if section is open on page load
+                    if (this.sections.history && this.history.length === 0) {
+                        this.loadHistory();
                     }
                 })
             },

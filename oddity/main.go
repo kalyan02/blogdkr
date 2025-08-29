@@ -30,7 +30,7 @@ var DefaultConfig = Config{
 	Port:           8081,
 }
 
-var SC = SiteConfig{
+var DefaultSiteConfig = SiteConfig{
 	Title: "Kalyan",
 	Navigation: []NavigationLink{
 		{
@@ -195,8 +195,34 @@ func renderIndexAtPath(c *gin.Context, path string) {
 		}
 	}
 
-	defaultIndexPath := filepath.Join(path, "index.md")
-	renderIndexAtPath(c, defaultIndexPath)
+	// if none of those exist then show 404
+	defaultIndexPath := filepath.Join(path, "index")
+	renderDoesNotExistButMaybeCreate(c, defaultIndexPath)
+}
+
+func buildPageNavLinks(page *Page) []NavigationLink {
+
+	parentSlug := "/"
+	if strings.Contains(page.Slug(), "/") {
+		parentSlug = filepath.Dir(page.Slug())
+		parentSlug = strings.Trim(parentSlug, "./")
+		// add prefix
+		parentSlug = "/" + parentSlug
+	}
+
+	if parentSlug == "/" || parentSlug == "index" || parentSlug == "blog" {
+		return DefaultSiteConfig.Navigation
+	}
+
+	var links []NavigationLink
+
+	prevLink := NavigationLink{
+		Name: "Home",
+		URL:  parentSlug,
+	}
+	links = append(links, prevLink)
+
+	return links
 }
 
 func renderIndexFileAtPath(c *gin.Context, path string) {
@@ -206,22 +232,13 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 		return
 	}
 
-	// get posts in this directory (its relative to content dir)
-	var posts []FileDetail
-	for _, f := range siteContent.FileName {
-		if f.FileType == FileTypeMarkdown || f.FileType == FileTypeHTML {
-			if filepath.Dir(f.FileName) == filepath.Dir(file.FileName) &&
-				!strings.HasSuffix(f.FileName, "index.md") &&
-				!strings.HasSuffix(f.FileName, "index.html") {
-				posts = append(posts, f)
-			}
-		}
-	}
-
 	page := NewPageFromFileDetail(&file)
 
+	sc := DefaultSiteConfig
+	sc.Navigation = buildPageNavLinks(page)
+
 	indexPage := PostPage{
-		Site: SC,
+		Site: sc,
 		Meta: PageMeta{
 			Title: page.Title(),
 		},
@@ -237,17 +254,21 @@ func renderIndexFileAtPath(c *gin.Context, path string) {
 
 func renderPage(c *gin.Context, file FileDetail) {
 	// load the file content and render it
-	p := NewPageFromFileDetail(&file)
+	page := NewPageFromFileDetail(&file)
+
+	sc := DefaultSiteConfig
+	sc.Navigation = buildPageNavLinks(page)
+
 	postPage := PostPage{
-		Site:            SC,
-		EditURL:         fmt.Sprintf("/admin/edit?path=%s", p.Slug()),
+		Site:            sc,
+		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
 		AdminLogged:     IsAuthenticated(c),
-		NewPostHintSlug: createNewPostSlugHint(p),
+		NewPostHintSlug: createNewPostSlugHint(page),
 		Meta: PageMeta{
-			Title: p.Title(),
+			Title: page.Title(),
 		},
-		PageHTML:    p.SafeHTML(),
-		CreatedDate: p.DateCreated(),
+		PageHTML:    page.SafeHTML(),
+		CreatedDate: page.DateCreated(),
 	}
 	//postPage.ModifiedDate = p.DateModified()
 
@@ -276,7 +297,7 @@ func createNewPostSlugHint(path *Page) string {
 
 func renderDoesNotExistButMaybeCreate(c *gin.Context, path string) {
 	postPage := PostPage{
-		Site: SC,
+		Site: DefaultSiteConfig,
 	}
 	postPage.Meta = PageMeta{
 		Title: "404 Not Found",
