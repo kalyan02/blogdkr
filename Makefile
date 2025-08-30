@@ -77,22 +77,6 @@ caddy-logs: ## Show Caddy logs
 caddy-shell: ## Open shell in Caddy container
 	sudo docker-compose exec $(SERVICE_CADDY) /bin/sh
 
-# Combined operations
-.PHONY: start
-start: caddy-up  ## Start both Caddy and BlogSync
-	@echo ""
-	@echo "✅ Services started:"
-	@echo "  - Caddy reverse proxy: http://localhost (port 80)"
-	@echo "  - BlogSync service: localhost:3000 (proxied through Caddy)"
-	@echo ""
-	@echo "Check status with: make status"
-
-.PHONY: stop
-stop: oddity-stop caddy-down ## Stop both services
-	@echo "✅ All services stopped"
-
-.PHONY: restart
-restart: stop start ## Restart both services
 
 .PHONY: status
 status: ## Check status of all services
@@ -120,7 +104,7 @@ oddity-build: ## Build oddity container
 
 .PHONY: oddity-run
 oddity-up: ## start oddity service via docker-compose
-	docker-compose up -d oddity
+	docker-compose up oddity
 
 .PHONY: oddity-down
 oddity-down: ## stop oddity service via docker-compose
