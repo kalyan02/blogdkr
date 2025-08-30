@@ -51,6 +51,12 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 		requestPath = "."
 	}
 
+	if requestPath == "index.html" || requestPath == "index" {
+		// just redirect to root
+		c.Redirect(http.StatusFound, "/")
+		return
+	}
+
 	if strings.HasSuffix(requestPath, ".html") {
 		requestPath = strings.TrimSuffix(requestPath, ".html")
 		requestPath = strings.Trim(requestPath, "/")
