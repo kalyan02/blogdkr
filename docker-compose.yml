@@ -6,18 +6,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile-php
-    container_name: blogsync-php
+    container_name: php
     volumes:
       - ./public_html:/var/www/html
-      - ./blogsync2/sync:/var/www/sync:ro
     restart: unless-stopped
-    network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "php-fpm -t"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - blog_network
 
   oddity:
     container_name: oddity
@@ -35,11 +35,13 @@ services:
     working_dir: /var/www/content
     entrypoint: ["oddity"]
     command: ["run"]
+    networks:
+      - blog_network
 
   # Caddy reverse proxy with PHP support
   caddy:
     image: caddy:2-alpine
-    container_name: blogsync-caddy
+    container_name: caddy
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy/data:/data
@@ -47,6 +49,9 @@ services:
       - ./caddy/logs:/var/log/caddy
       - ./public_html:/var/www/html
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - blog_network
 
-# No Docker volumes - using host-mounted directories
+networks:
+  blog_network:
+    driver: bridge

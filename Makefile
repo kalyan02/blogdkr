@@ -116,7 +116,7 @@ logs: ## Show logs for both services
 # oddity management
 .PHONY: oddity-build
 oddity-build: ## Build oddity container
-	docker-compose build oddity
+	DOCKER_BUILDKIT=1 docker-compose build oddity
 
 .PHONY: oddity-run
 oddity-up: ## start oddity service via docker-compose

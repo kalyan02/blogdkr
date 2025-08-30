@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"oddity/pkg/authz"
 	"oddity/pkg/config"
@@ -27,6 +28,8 @@ func (s *SiteApp) RegisterRoutes(r *gin.Engine) {
 
 func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 	requestPath := c.Request.URL.Path
+
+	logrus.Infof("Handling request for path: %s", requestPath)
 
 	// check if it is a static file is that's requested
 	if IsStaticFile(requestPath) {
@@ -68,7 +71,8 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 		return
 	}
 
-	c.String(404, "Not Found")
+	//c.String(404, "Not Found")
+	s.render404(c)
 }
 
 func (s *SiteApp) renderIndexAtPath(c *gin.Context, path string) {
@@ -130,7 +134,7 @@ func (s *SiteApp) backLinkToParent(path string) string {
 func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 	file, ok := s.SiteContent.DoPath(path)
 	if !ok {
-		c.String(404, "Index Not Found")
+		s.render404(c)
 		return
 	}
 	page := contentstuff.NewPageFromFileDetail(&file)

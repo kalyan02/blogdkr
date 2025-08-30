@@ -10,52 +10,32 @@
 
 (app_routes) {
 	# API first
-	handle /health {
-		reverse_proxy localhost:3000
-	}
-	handle /webhook {
-		reverse_proxy localhost:3000
-	}
-	handle /auth/* {
-		reverse_proxy localhost:3000
-	}
+	# handle /health {
+	# 	reverse_proxy localhost:3000
+	# }
+	# handle /webhook {
+	# 	reverse_proxy localhost:3000
+	# }
+	# handle /auth/* {
+	# 	reverse_proxy localhost:3000
+	# }
 
 	# Everything else
 	handle {
-		# 1) /var/www/sync when file exists (never serve .php)
-		# @sync_exists {
-		# 	file {
-		# 		root /var/www/html
-		# 		try_files {path} {path}/index.html
-		# 	}
-		# }
-		# handle @sync_exists {
-		# 	root * /var/www/html
-		# 	file_server {
-		# 		hide *.php
-		# 	}
+		# root * /var/www/html
+
+		# # Handles .php and directories with index.php
+		# php_fastcgi localhost:9000 {
+		# 	try_files {path} {path}/index.php =404
 		# }
 
-		root * /var/www/html
+		# # Serve static files, hide .php from being served as plain files
+		# file_server {
+		# 	hide *.php
+		# }
 
-		# Handles .php and directories with index.php
-		php_fastcgi localhost:9000 {
-			try_files {path} {path}/index.php =404
-		}
-
-		# Serve static files, hide .php from being served as plain files
-		file_server {
-			hide *.php
-		}
-
-		# proxy anything else to the API server
-		# reverse_proxy localhost:3000
-		handler {
-			reverse_proxy localhost:3000
-		}
-
-		# 5) nothing matched
-		# respond 404
+		# Proxy all routes to the API server
+		reverse_proxy oddity:8081
 	}
 }
 
@@ -72,17 +52,18 @@
 # ---------- end snippets ----------
 
 # TLS sites
-devnet.lonefish.net, devnet2.lonefish.net {
-	tls letsencrypt@namburi.org
+# devnet.lonefish.net, devnet2.lonefish.net {
+# 	tls letsencrypt@namburi.org
 
-	import logging
-	import security_headers
-	import app_routes
-}
+# 	import logging
+# 	import security_headers
+# 	import app_routes
+# }
 
 # Plain HTTP
 :80 {
 	import logging
 	import security_headers
 	import app_routes
+	
 }
