@@ -18,10 +18,10 @@ import (
 )
 
 type ContentStuff struct {
-	FileName    map[string]FileDetail
-	SlugFileMap map[string]FileDetail
-	Config      config.ContentConfig
-	DBHandle    *gorm.DB
+	FileName      map[string]FileDetail
+	SlugFileMap   map[string]FileDetail
+	ContentConfig config.ContentConfig
+	DBHandle      *gorm.DB
 }
 
 func (c *ContentStuff) AllFiles() []FileDetail {
@@ -44,15 +44,15 @@ func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
 
 func NewContentStuff(config config.ContentConfig) *ContentStuff {
 	return &ContentStuff{
-		Config:      config,
-		FileName:    make(map[string]FileDetail),
-		SlugFileMap: make(map[string]FileDetail),
+		ContentConfig: config,
+		FileName:      make(map[string]FileDetail),
+		SlugFileMap:   make(map[string]FileDetail),
 	}
 }
 
 func (c *ContentStuff) LoadContent() error {
 	// DB Connect
-	db, err := sqliteConnect(c.Config.SidecarDB)
+	db, err := sqliteConnect(c.ContentConfig.SidecarDB)
 	if err != nil {
 		return fmt.Errorf("error connecting to sqlite db: %v", err)
 	}
@@ -64,7 +64,7 @@ func (c *ContentStuff) LoadContent() error {
 	}
 
 	// traverse the directory c.Config.ContentDir
-	err = filepath.Walk(c.Config.ContentDir, c.scanContentPath)
+	err = filepath.Walk(c.ContentConfig.ContentDir, c.scanContentPath)
 	if err != nil {
 		return fmt.Errorf("error walking content dir: %v", err)
 	}
@@ -145,7 +145,7 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 		return nil, fmt.Errorf("error creating watcher: %v", err)
 	}
 
-	absContentDir, err := filepath.Abs(c.Config.ContentDir)
+	absContentDir, err := filepath.Abs(c.ContentConfig.ContentDir)
 	if err != nil {
 		return nil, fmt.Errorf("error getting absolute path: %v", err)
 	}
@@ -183,7 +183,7 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 		}
 	}()
 
-	err = watcher.Add(c.Config.ContentDir)
+	err = watcher.Add(c.ContentConfig.ContentDir)
 	if err != nil {
 		return nil, fmt.Errorf("error adding watcher: %v", err)
 	}
@@ -192,7 +192,7 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 }
 
 func (c *ContentStuff) RefreshContent(path string) error {
-	path = filepath.Join(c.Config.ContentDir, path)
+	path = filepath.Join(c.ContentConfig.ContentDir, path)
 	return c.scanContentPath(path, nil, nil)
 }
 
@@ -200,7 +200,7 @@ func (c *ContentStuff) scanContentPath(path string, info fs.FileInfo, err error)
 	if err != nil {
 		return err
 	}
-	relPath, err := filepath.Rel(c.Config.ContentDir, path)
+	relPath, err := filepath.Rel(c.ContentConfig.ContentDir, path)
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func (c *ContentStuff) WriteFile(targetFile string, content string) error {
 }
 
 func (c *ContentStuff) ReadContentFile(fileName string) (string, error) {
-	targetFile := filepath.Join(c.Config.ContentDir, fileName)
+	targetFile := filepath.Join(c.ContentConfig.ContentDir, fileName)
 	content, err := os.ReadFile(targetFile)
 	if err != nil {
 		return "", fmt.Errorf("error reading file: %v", err)
@@ -316,7 +316,7 @@ func (c *ContentStuff) ReadContentFile(fileName string) (string, error) {
 
 // WriteContentFile will resolve the content path to the directory before writing
 func (c *ContentStuff) WriteContentFile(fileName string, content string) error {
-	targetFile := filepath.Join(c.Config.ContentDir, fileName)
+	targetFile := filepath.Join(c.ContentConfig.ContentDir, fileName)
 
 	c.WriteContentFileHistory(fileName, content)
 
@@ -373,7 +373,7 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 			return fmt.Errorf("error converting to markdown: %v", err)
 		}
 
-		targetFile := filepath.Join(sc.Config.ContentDir, fd.FileName)
+		targetFile := filepath.Join(sc.ContentConfig.ContentDir, fd.FileName)
 
 		err = sc.WriteContentFile(fd.FileName, content)
 		if err != nil {
@@ -399,7 +399,7 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 		}
 		for _, ip := range indexPaths {
 			if _, err := os.Stat(ip); err == nil {
-				relativeIP, err := filepath.Rel(sc.Config.ContentDir, ip)
+				relativeIP, err := filepath.Rel(sc.ContentConfig.ContentDir, ip)
 				if err != nil {
 					logrus.Errorf("error getting relative path for %s: %v", ip, err)
 					continue

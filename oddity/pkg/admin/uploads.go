@@ -34,7 +34,7 @@ func (s *AdminApp) HandleFileUpload(c *gin.Context) {
 	}
 
 	// Create post-specific upload directory
-	uploadDir := filepath.Join(s.SiteContent.Config.UploadDir, fullSlug)
+	uploadDir := filepath.Join(s.SiteContent.ContentConfig.UploadDir, fullSlug)
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		c.JSON(500, gin.H{"error": fmt.Sprintf("failed to create upload directory: %v", err)})
 		return
@@ -92,7 +92,7 @@ func (s *AdminApp) HandleUploadsList(c *gin.Context) {
 		return
 	}
 
-	uploadDir := filepath.Join(s.SiteContent.Config.UploadDir, fullSlug)
+	uploadDir := filepath.Join(s.SiteContent.ContentConfig.UploadDir, fullSlug)
 
 	// Check if directory exists
 	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
@@ -160,7 +160,7 @@ func (s *AdminApp) HandleFileDelete(c *gin.Context) {
 		return
 	}
 
-	filePath := filepath.Join(s.SiteContent.Config.UploadDir, req.FullSlug, req.Filename)
+	filePath := filepath.Join(s.SiteContent.ContentConfig.UploadDir, req.FullSlug, req.Filename)
 
 	if err := os.Remove(filePath); err != nil {
 		if os.IsNotExist(err) {

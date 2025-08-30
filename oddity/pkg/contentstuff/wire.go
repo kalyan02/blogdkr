@@ -112,7 +112,7 @@ func (w *Wire) ScanContentFileForQueries(filePath string) error {
 
 // extractQueriesFromFile finds all query comments in a file
 func (w *Wire) extractQueriesFromFile(filePath string) ([]QueryLocation, error) {
-	fullPath := filepath.Join(w.content.Config.ContentDir, filePath)
+	fullPath := filepath.Join(w.content.ContentConfig.ContentDir, filePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, err
@@ -274,7 +274,7 @@ func (w *Wire) updateQuery(fileCtx *FileDetail, location QueryLocation) error {
 	}
 
 	// Read current file content
-	fullPath := filepath.Join(w.content.Config.ContentDir, location.FilePath)
+	fullPath := filepath.Join(w.content.ContentConfig.ContentDir, location.FilePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return err
@@ -305,14 +305,57 @@ func (w *Wire) updateQuery(fileCtx *FileDetail, location QueryLocation) error {
 func (w *Wire) executeQuery(ctx *FileDetail, query *QueryAST) ([]string, error) {
 	switch query.Type {
 	case QueryPosts:
-		return w.executePostsQuery(ctx, query)
+		filtered := w.executePostsQuery(ctx, query)
+		// Convert to markdown format based on specified format
+		return w.formatResults(filtered, query.MDFormat)
 	default:
 		return nil, fmt.Errorf("unsupported query type: %v", query.Type)
 	}
 }
 
+func (w *Wire) GetQueriesForFile(filePath string) []QueryLocation {
+	if queries, exists := w.queries[filePath]; exists {
+		return queries
+	}
+	return nil
+}
+
+func (w *Wire) PostHasQueries(filePath string) bool {
+	if _, exists := w.queries[filePath]; exists {
+		return true
+	}
+	return false
+}
+
+func (w *Wire) GetQueryResultsForPost(filePath string) ([]FileDetail, error) {
+	var results []FileDetail
+	fileDetail, exists := w.content.DoPath(filePath)
+	if !exists {
+		return nil, fmt.Errorf("file not found in content store: %s", filePath)
+	}
+
+	queries, exists := w.queries[filePath]
+	if !exists {
+		return nil, fmt.Errorf("no queries found in file: %s", filePath)
+	}
+
+	// empty is also a valid case
+	if len(queries) == 0 {
+		return nil, nil
+	}
+
+	for _, q := range queries {
+		if q.Query.Type == QueryPosts {
+			res := w.executePostsQuery(&fileDetail, q.Query)
+			results = append(results, res...)
+		}
+	}
+
+	return w.applySortToFiles(results, SortDate, SortDesc), nil
+}
+
 // executePostsQuery handles "posts" queries
-func (w *Wire) executePostsQuery(ctx *FileDetail, query *QueryAST) ([]string, error) {
+func (w *Wire) executePostsQuery(ctx *FileDetail, query *QueryAST) []FileDetail {
 	// Get all posts (non-index markdown files)
 	var posts []FileDetail
 	var allFiles = w.content.AllFiles()
@@ -337,13 +380,12 @@ func (w *Wire) executePostsQuery(ctx *FileDetail, query *QueryAST) ([]string, er
 	filtered := w.applyFiltersToFiles(allowed, query.Filters)
 
 	// Apply sorting
-	sorted := w.applySortToFiles(filtered, query)
+	sorted := w.applySortToFiles(filtered, query.SortType, query.SortOrder)
 
 	// Apply limit
 	limited := w.applyLimitToFiles(sorted, query)
 
-	// Convert to markdown format based on specified format
-	return w.formatResults(limited, query.MDFormat)
+	return limited
 }
 
 func (w *Wire) applyAccessControl(ctx *FileDetail, posts []FileDetail, query *QueryAST) []FileDetail {
@@ -421,13 +463,15 @@ func (w *Wire) fileMatchesFilter(file FileDetail, filter QueryFilter) bool {
 	return false
 }
 
-func (w *Wire) applySortToFiles(files []FileDetail, query *QueryAST) []FileDetail {
-	if query.Sort == "" {
+func (w *Wire) applySortToFiles(files []FileDetail, sortType SortType, sortOrder SortOrder) []FileDetail {
+	if sortType == "" {
 		return files
 	}
 
+	//var query = &QueryAST{}
+
 	sort.Slice(files, func(i, j int) bool {
-		switch query.Sort {
+		switch sortType {
 		case SortDate, SortModified, SortRecent:
 			pgi := NewPageFromFileDetail(&files[i])
 			pgj := NewPageFromFileDetail(&files[j])
@@ -445,14 +489,14 @@ func (w *Wire) applySortToFiles(files []FileDetail, query *QueryAST) []FileDetai
 				return true
 			}
 
-			if query.Order == SortDesc {
+			if sortOrder == SortDesc {
 				return datei.After(*datej)
 			}
 			return datei.Before(*datej)
 		case SortTitle:
 			titleI := w.getTitleFromFile(files[i])
 			titleJ := w.getTitleFromFile(files[j])
-			if query.Order == SortDesc {
+			if sortOrder == SortDesc {
 				return titleI > titleJ
 			}
 			return titleI < titleJ

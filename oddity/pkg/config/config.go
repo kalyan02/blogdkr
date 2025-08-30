@@ -82,6 +82,8 @@ type SiteConfig struct {
 	Description string           `toml:"description,omitempty"`
 	BaseURL     string           `toml:"base_url,omitempty"`
 	Navigation  []NavigationLink `toml:"navigation,inline"`
+	AuthorEmail string           `toml:"author_email,omitempty"`
+	Author      string           `toml:"author"`
 }
 
 type NavigationLink struct {
@@ -102,6 +104,9 @@ var DefaultConfig = ContentConfig{
 }
 
 var DefaultSiteConfig = SiteConfig{
+	Author:      "Kalyan",
+	AuthorEmail: "",
+
 	Title: "Kalyan",
 	Navigation: []NavigationLink{
 		{

@@ -18,11 +18,11 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="posts" limit="5">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryPosts,
-				Limit:    5,
-				MDFormat: FormatListWithDate,
-				Sort:     SortRecent,
-				Order:    SortDesc,
+				Type:      QueryPosts,
+				Limit:     5,
+				MDFormat:  FormatListWithDate,
+				SortType:  SortRecent,
+				SortOrder: SortDesc,
 			},
 		},
 		{
@@ -30,11 +30,11 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="posts" sort="recent" limit="3" order="desc">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryPosts,
-				Sort:     SortRecent,
-				Order:    SortDesc,
-				Limit:    3,
-				MDFormat: FormatListWithDate,
+				Type:      QueryPosts,
+				SortType:  SortRecent,
+				SortOrder: SortDesc,
+				Limit:     3,
+				MDFormat:  FormatListWithDate,
 			},
 		},
 		{
@@ -46,8 +46,8 @@ func TestParseQuery(t *testing.T) {
 				HTMLTemplate: "recent-posts.html",
 				MDFormat:     FormatList,
 				Limit:        10,
-				Order:        SortDesc,
-				Sort:         SortRecent,
+				SortOrder:    SortDesc,
+				SortType:     SortRecent,
 			},
 		},
 		{
@@ -55,10 +55,10 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="backlinks">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryBacklinks,
-				MDFormat: FormatListWithDate,
-				Order:    SortDesc,
-				Sort:     SortRecent,
+				Type:      QueryBacklinks,
+				MDFormat:  FormatListWithDate,
+				SortOrder: SortDesc,
+				SortType:  SortRecent,
 			},
 		},
 		{
@@ -66,10 +66,10 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="posts" tag="project" sort="date" order="desc">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryPosts,
-				Sort:     SortDate,
-				Order:    SortDesc,
-				MDFormat: FormatListWithDate,
+				Type:      QueryPosts,
+				SortType:  SortDate,
+				SortOrder: SortDesc,
+				MDFormat:  FormatListWithDate,
 				Filters: []QueryFilter{
 					{Field: "tag", Operator: "contains", Value: "project"},
 				},
@@ -80,14 +80,14 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="posts" where="tag contains 'golang'" limit="5">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryPosts,
-				Limit:    5,
-				MDFormat: FormatListWithDate,
-				Order:    SortDesc,
+				Type:      QueryPosts,
+				Limit:     5,
+				MDFormat:  FormatListWithDate,
+				SortOrder: SortDesc,
 				Filters: []QueryFilter{
 					{Field: "tag", Operator: "contains", Value: "golang"},
 				},
-				Sort: SortRecent,
+				SortType: SortRecent,
 			},
 		},
 		{
@@ -95,12 +95,12 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="posts" path="blog/*" sort="recent" limit="3">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryPosts,
-				Path:     "blog/*",
-				Sort:     SortRecent,
-				Order:    SortDesc,
-				Limit:    3,
-				MDFormat: FormatListWithDate,
+				Type:      QueryPosts,
+				Path:      "blog/*",
+				SortType:  SortRecent,
+				SortOrder: SortDesc,
+				Limit:     3,
+				MDFormat:  FormatListWithDate,
 			},
 		},
 		{
@@ -108,11 +108,11 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="posts" path="./notes/*.md" md-format="detailed">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryPosts,
-				Path:     "./notes/*.md",
-				MDFormat: FormatDetailed,
-				Order:    SortDesc,
-				Sort:     SortRecent,
+				Type:      QueryPosts,
+				Path:      "./notes/*.md",
+				MDFormat:  FormatDetailed,
+				SortOrder: SortDesc,
+				SortType:  SortRecent,
 			},
 		},
 		{
@@ -125,11 +125,11 @@ func TestParseQuery(t *testing.T) {
 			input:     `<query type="posts" limit="5">`,
 			expectErr: false,
 			expected: &QueryAST{
-				Type:     QueryPosts,
-				Limit:    5,
-				MDFormat: FormatListWithDate,
-				Order:    SortDesc,
-				Sort:     SortRecent,
+				Type:      QueryPosts,
+				Limit:     5,
+				MDFormat:  FormatListWithDate,
+				SortOrder: SortDesc,
+				SortType:  SortRecent,
 			},
 		},
 		{
@@ -164,12 +164,12 @@ func TestParseQuery(t *testing.T) {
 				t.Errorf("Path mismatch: got %v, want %v", result.Path, tt.expected.Path)
 			}
 
-			if result.Sort != tt.expected.Sort {
-				t.Errorf("Sort mismatch: got %v, want %v", result.Sort, tt.expected.Sort)
+			if result.SortType != tt.expected.SortType {
+				t.Errorf("Sort mismatch: got %v, want %v", result.SortType, tt.expected.SortType)
 			}
 
-			if result.Order != tt.expected.Order {
-				t.Errorf("Order mismatch: got %v, want %v", result.Order, tt.expected.Order)
+			if result.SortOrder != tt.expected.SortOrder {
+				t.Errorf("Order mismatch: got %v, want %v", result.SortOrder, tt.expected.SortOrder)
 			}
 
 			if result.Limit != tt.expected.Limit {
@@ -207,11 +207,11 @@ func TestParseQuery(t *testing.T) {
 
 func TestQueryString(t *testing.T) {
 	query := &QueryAST{
-		Type:     QueryPosts,
-		Sort:     SortRecent,
-		Order:    SortDesc,
-		Limit:    5,
-		MDFormat: FormatListWithDate,
+		Type:      QueryPosts,
+		SortType:  SortRecent,
+		SortOrder: SortDesc,
+		Limit:     5,
+		MDFormat:  FormatListWithDate,
 		Filters: []QueryFilter{
 			{Field: "tag", Operator: "contains", Value: "golang"},
 		},
@@ -270,10 +270,10 @@ func TestQueryExtraction(t *testing.T) {
 Some other content.`,
 			expectedQueries: 1,
 			expectedQuery: &QueryAST{
-				Type:     QueryPosts,
-				Limit:    3,
-				MDFormat: FormatList,
-				Order:    SortAsc,
+				Type:      QueryPosts,
+				Limit:     3,
+				MDFormat:  FormatList,
+				SortOrder: SortAsc,
 			},
 			expectedContent: []string{
 				"- [Post 1](post1)",
@@ -292,12 +292,12 @@ Some other content.`,
 End of page.`,
 			expectedQueries: 1,
 			expectedQuery: &QueryAST{
-				Type:     QueryPosts,
-				Path:     "blog/*",
-				Sort:     SortRecent,
-				Order:    SortDesc,
-				Limit:    2,
-				MDFormat: FormatList,
+				Type:      QueryPosts,
+				Path:      "blog/*",
+				SortType:  SortRecent,
+				SortOrder: SortDesc,
+				Limit:     2,
+				MDFormat:  FormatList,
 			},
 			expectedContent: []string{
 				"- [Blog Post 1](blog/post1) - 2024-01-15",
@@ -347,8 +347,8 @@ End of page.`,
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a mock Wire instance
 			contentStuff := &ContentStuff{
-				FileName: make(map[string]FileDetail),
-				Config:   config.ContentConfig{ContentDir: "/test"},
+				FileName:      make(map[string]FileDetail),
+				ContentConfig: config.ContentConfig{ContentDir: "/test"},
 			}
 			wire := NewWire(contentStuff)
 

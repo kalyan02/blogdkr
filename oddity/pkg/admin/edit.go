@@ -433,15 +433,15 @@ func buildMaybeTitle(newPath string) string {
 func (s *AdminApp) createNewPostSlugHint(path *contentstuff.Page) string {
 	var slugDir string
 	if path == nil {
-		slugDir = s.SiteContent.Config.DefaultNewHint
+		slugDir = s.SiteContent.ContentConfig.DefaultNewHint
 	} else {
-		slugDir = s.SiteContent.Config.DefaultNewHint
+		slugDir = s.SiteContent.ContentConfig.DefaultNewHint
 		if path.Slug() != "" {
 			slugDir = filepath.Dir(path.Slug())
 		}
 	}
 	if slugDir == "." {
-		slugDir = s.SiteContent.Config.DefaultNewHint
+		slugDir = s.SiteContent.ContentConfig.DefaultNewHint
 	}
 
 	today := time.Now().Format("2006-01-02")
@@ -544,8 +544,8 @@ func (s *AdminApp) HandleFileRename(c *gin.Context) {
 		return
 	}
 
-	oldFilePath := filepath.Join(s.SiteContent.Config.UploadDir, req.FullSlug, req.OldFilename)
-	newFilePath := filepath.Join(s.SiteContent.Config.UploadDir, req.FullSlug, req.NewFilename)
+	oldFilePath := filepath.Join(s.SiteContent.ContentConfig.UploadDir, req.FullSlug, req.OldFilename)
+	newFilePath := filepath.Join(s.SiteContent.ContentConfig.UploadDir, req.FullSlug, req.NewFilename)
 
 	// Check if old file exists
 	if _, err := os.Stat(oldFilePath); os.IsNotExist(err) {

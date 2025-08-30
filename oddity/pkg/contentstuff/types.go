@@ -43,7 +43,8 @@ type PostPage struct {
 	IsAuthenticated bool       `json:"is_authenticated,omitempty"`
 	IsPrivate       bool       `json:"is_private,omitempty"`
 	ParentSlug      string     `json:"parent_slug,omitempty"`
-	BackLink        string
+	BackLink        string     `json:"back_link,omitempty"`
+	FeedsLink       string     `json:"feeds_link,omitempty"`
 }
 
 // IndexPage represents the data structure for rendering the main blog index

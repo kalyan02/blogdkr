@@ -34,7 +34,7 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 
 	// check if it is a static file is that's requested
 	if IsStaticFile(requestPath) {
-		for _, staticDir := range s.SiteContent.Config.StaticDirs {
+		for _, staticDir := range s.SiteContent.ContentConfig.StaticDirs {
 			staticFilePath := filepath.Join(staticDir, requestPath)
 			if _, err := os.Stat(staticFilePath); err == nil {
 				c.File(staticFilePath)
@@ -67,6 +67,12 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 			c.Redirect(http.StatusFound, "/"+requestPath)
 			return
 		}
+	}
+
+	if strings.HasSuffix(requestPath, ".xml") || strings.HasSuffix(requestPath, ".rss") || strings.HasSuffix(requestPath, ".atom") {
+		// handle rss feed request
+		s.renderRSSFeed(c, requestPath)
+		return
 	}
 
 	if file, ok := s.SiteContent.DoPath(requestPath); ok {
@@ -181,6 +187,7 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 		IsPrivate:       page.IsPrivate(),
 		IsAuthenticated: authz.IsAuthenticated(c),
 		BackLink:        s.backLinkToParent(page.Slug()),
+		FeedsLink:       s.createFeedsLink(page),
 	}
 
 	c.HTML(200, "post.html", indexPage)
@@ -214,6 +221,7 @@ func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 		CreatedDate:  page.DateCreated(),
 		ModifiedDate: page.DateModified(),
 		BackLink:     s.backLinkToParent(page.Slug()),
+		FeedsLink:    s.createFeedsLink(page),
 	}
 	//postPage.ModifiedDate = p.DateModified()
 
@@ -228,7 +236,7 @@ func (s *SiteApp) createNewPostSlugHint(path *contentstuff.Page) string {
 func (s *SiteApp) createNewPostSlugHintFromPath(currSlug string) string {
 	slugDir := filepath.Dir(currSlug)
 	if slugDir == "." {
-		slugDir = s.SiteContent.Config.DefaultNewHint
+		slugDir = s.SiteContent.ContentConfig.DefaultNewHint
 	}
 
 	today := time.Now().Format("2006-01-02")
@@ -244,6 +252,17 @@ func (s *SiteApp) createNewPostSlugHintFromPath(currSlug string) string {
 	return hintSlug
 }
 
+func (s *SiteApp) createFeedsLink(pg *contentstuff.Page) string {
+	if pg == nil {
+		return ""
+	}
+	slug := pg.Slug()
+	if s.WireController.PostHasQueries(pg.File.FileName) {
+		return fmt.Sprintf("/%s.xml", slug)
+	}
+	return ""
+}
+
 func (s *SiteApp) render404(c *gin.Context) {
 	postPage := contentstuff.PostPage{
 		Site: s.Config.Site,
@@ -253,7 +272,7 @@ func (s *SiteApp) render404(c *gin.Context) {
 	}
 	postPage.PageHTML = template.HTML("<p>The page you are looking for does not exist.</p>")
 
-	c.HTML(404, "post.html", postPage)
+	c.HTML(http.StatusNotFound, "post.html", postPage)
 
 }
 
@@ -270,6 +289,19 @@ func (s *SiteApp) render404ButMaybeCreate(c *gin.Context, path string) {
 <p>The page you are looking for does not exist.</p>
 <p><a href="/admin/edit?path=%s">Create it</a></p>`, path))
 
-	c.HTML(404, "post.html", postPage)
+	c.HTML(http.StatusNotFound, "post.html", postPage)
 
+}
+
+func (s *SiteApp) renderError(c *gin.Context, path string) {
+	postPage := contentstuff.PostPage{
+		Site:            s.Config.Site,
+		IsAuthenticated: authz.IsAuthenticated(c),
+		NewPostHintSlug: s.createNewPostSlugHintFromPath(path),
+		Meta: contentstuff.PageMeta{
+			Title: "Error",
+		},
+		PageHTML: template.HTML(fmt.Sprintf(`<p>There was an error processing your request for %s</p>`, path)),
+	}
+	c.HTML(http.StatusInternalServerError, "post.html", postPage)
 }

@@ -162,7 +162,7 @@ func (qr *QueryRenderer) executePostsQueryForSection(section *QuerySection) erro
 	// Apply filters, sorting, and limits (reuse Wire engine logic)
 	wire := NewWire(qr.content)
 	filtered := wire.applyFiltersToFiles(posts, section.Query.Filters)
-	sorted := wire.applySortToFiles(filtered, section.Query)
+	sorted := wire.applySortToFiles(filtered, section.Query.SortType, section.Query.SortOrder)
 	limited := wire.applyLimitToFiles(sorted, section.Query)
 
 	section.Results = limited

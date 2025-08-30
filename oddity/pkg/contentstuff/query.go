@@ -68,8 +68,8 @@ type QueryFilter struct {
 type QueryAST struct {
 	Type           QueryType     `json:"type"`
 	Path           string        `json:"path,omitempty"` // path filter pattern
-	Sort           SortType      `json:"sort,omitempty"`
-	Order          SortOrder     `json:"order,omitempty"`
+	SortType       SortType      `json:"sort_type,omitempty"`
+	SortOrder      SortOrder     `json:"sort_order,omitempty"`
 	Limit          int           `json:"limit,omitempty"`
 	Filters        []QueryFilter `json:"filters,omitempty"`
 	HTMLTemplate   string        `json:"html_template,omitempty"`
@@ -131,9 +131,9 @@ func ParseQuery(queryString string) (*QueryAST, error) {
 
 	// Parse sort type
 	if queryXML.Sort != "" {
-		query.Sort = SortType(strings.ToLower(queryXML.Sort))
+		query.SortType = SortType(strings.ToLower(queryXML.Sort))
 	} else {
-		query.Sort = SortRecent // default
+		query.SortType = SortRecent // default
 	}
 
 	query.IncludePrivate = false
@@ -146,13 +146,13 @@ func ParseQuery(queryString string) (*QueryAST, error) {
 
 	// Parse sort order
 	if queryXML.Order != "" {
-		query.Order = SortOrder(strings.ToLower(queryXML.Order))
+		query.SortOrder = SortOrder(strings.ToLower(queryXML.Order))
 	} else {
 		// Default order based on sort type
-		if query.Sort == SortRecent || query.Sort == SortDate || query.Sort == SortModified {
-			query.Order = SortDesc
+		if query.SortType == SortRecent || query.SortType == SortDate || query.SortType == SortModified {
+			query.SortOrder = SortDesc
 		} else {
-			query.Order = SortAsc
+			query.SortOrder = SortAsc
 		}
 	}
 
@@ -221,10 +221,10 @@ func (q *QueryAST) String() string {
 		parts = append(parts, fmt.Sprintf("path:%s", q.Path))
 	}
 
-	if q.Sort != "" {
-		parts = append(parts, fmt.Sprintf("sort:%s", q.Sort))
-		if q.Order != "" && q.Order != SortAsc {
-			parts = append(parts, fmt.Sprintf("order:%s", q.Order))
+	if q.SortType != "" {
+		parts = append(parts, fmt.Sprintf("sort:%s", q.SortType))
+		if q.SortOrder != "" && q.SortOrder != SortAsc {
+			parts = append(parts, fmt.Sprintf("order:%s", q.SortOrder))
 		}
 	}
 
