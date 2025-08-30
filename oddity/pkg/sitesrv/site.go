@@ -87,9 +87,14 @@ func (s *SiteApp) renderIndexAtPath(c *gin.Context, path string) {
 		}
 	}
 
-	// if none of those exist then show 404
-	defaultIndexPath := filepath.Join(path, "index")
-	s.render404ButMaybeCreate(c, defaultIndexPath)
+	if authz.IsAuthenticated(c) {
+		// if none of those exist then show 404
+		defaultIndexPath := filepath.Join(path, "index")
+		s.render404ButMaybeCreate(c, defaultIndexPath)
+		return
+	}
+
+	s.render404(c)
 }
 
 func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.NavigationLink {
