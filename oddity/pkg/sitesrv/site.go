@@ -3,6 +3,7 @@ package sitesrv
 import (
 	"fmt"
 	"html/template"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,18 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 
 	if requestPath == "" {
 		requestPath = "."
+	}
+
+	if strings.HasSuffix(requestPath, ".html") {
+		requestPath = strings.TrimSuffix(requestPath, ".html")
+		requestPath = strings.Trim(requestPath, "/")
+
+		// check if path without .html exists
+		if _, ok := s.SiteContent.DoPath(requestPath); ok {
+			// if it exists, redirect to it
+			c.Redirect(http.StatusFound, "/"+requestPath)
+			return
+		}
 	}
 
 	if file, ok := s.SiteContent.DoPath(requestPath); ok {
