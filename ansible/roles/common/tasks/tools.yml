@@ -1,0 +1,42 @@
+---
+- name: Install Go programming language
+  apt:
+    name: golang-go
+    state: present
+  become: yes
+  when: ansible_os_family == "Debian"
+
+
+# install some packages (curl, mysql-client, sqlite3, mosh, jq, tree)
+- name: Install required packages
+  apt:
+    name:
+      - curl
+      - mysql-client
+      - sqlite3
+      - mosh
+      - jq
+      - tree
+    state: present
+  become: yes
+  when: ansible_os_family == "Debian"
+
+- name: Install lazydocker via go install
+  shell: |
+    export GOPATH=/home/{{ the_user }}/go
+    export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+    go install github.com/jesseduffield/lazydocker@latest
+  become_user: "{{ the_user }}"
+  become: yes
+  args:
+    creates: "/home/{{ the_user }}/go/bin/lazydocker"
+
+- name: Add Go paths to user bashrc
+  lineinfile:
+    dest: "/home/{{ the_user }}/.bashrc"
+    line: "{{ item }}"
+    state: present
+  with_items:
+    - "export GOPATH=/home/{{ the_user }}/go"
+    - "export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin"
+  become: yes

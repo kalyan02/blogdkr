@@ -1,0 +1,44 @@
+---
+- name: Lock root account
+  user:
+    name: root
+    password_lock: yes
+  become: yes
+
+- name: Remove root password
+  user:
+    name: root
+    password: '!'
+  become: yes
+
+- name: Remove .ssh directory from root (if exists)
+  file:
+    path: /root/.ssh
+    state: absent
+  become: yes
+
+- name: Ensure root cannot login via SSH (double-check)
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+    state: present
+  become: yes
+
+- name: Remove root crontab entirely
+  file:
+    path: /var/spool/cron/crontabs/root
+    state: absent
+  become: yes
+  ignore_errors: yes
+
+- name: Display security notice
+  debug:
+    msg:
+      - "=== SECURITY HARDENING COMPLETE ==="
+      - "Root account has been locked and disabled"
+      - "SSH port changed to {{ ssh_port }}"
+      - "Only {{ the_user }} can access via SSH with key authentication"
+      - "UFW firewall is active"
+      - "Fail2ban is monitoring SSH attempts"
+      - "=== RECONNECT USING: ssh -p {{ ssh_port }} {{ the_user }}@{{ ansible_host }} ==="

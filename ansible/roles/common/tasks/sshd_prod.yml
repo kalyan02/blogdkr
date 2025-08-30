@@ -1,0 +1,79 @@
+---
+# SSH hardening for production (idempotent, doesn't change port)
+- name: Ensure SSH port is set correctly
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?Port"
+    line: "Port {{ ssh_port }}"
+    state: present
+  become: yes
+  register: ssh_port_check
+
+- name: Ensure root login is disabled
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+    state: present
+  become: yes
+  register: root_login_check
+
+- name: Ensure password authentication is disabled
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+    state: present
+  become: yes
+  register: password_auth_check
+
+- name: Ensure challenge response authentication is disabled
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?ChallengeResponseAuthentication"
+    line: "ChallengeResponseAuthentication no"
+    state: present
+  become: yes
+  register: challenge_auth_check
+
+- name: Enable PAM for SSH key authentication
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?UsePAM"
+    line: "UsePAM yes"
+    state: present
+  become: yes
+  register: pam_auth_check
+
+- name: Ensure only {{ the_user }} user is allowed
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?AllowUsers"
+    line: "AllowUsers {{ the_user }}"
+    state: present
+  become: yes
+  register: allow_users_check
+
+- name: Ensure SSH hardening settings are applied
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "^#?{{ item.key }}"
+    line: "{{ item.key }} {{ item.value }}"
+    state: present
+  become: yes
+  loop:
+    - { key: 'Protocol', value: '2' }
+    - { key: 'MaxAuthTries', value: '3' }
+    - { key: 'ClientAliveInterval', value: '300' }
+    - { key: 'ClientAliveCountMax', value: '2' }
+    - { key: 'X11Forwarding', value: 'no' }
+  register: ssh_hardening_check
+
+- name: Restart SSH if configuration changed
+  service:
+    name: sshd
+    state: restarted
+  become: yes
+  when: ssh_port_check.changed or root_login_check.changed or password_auth_check.changed or 
+        challenge_auth_check.changed or pam_auth_check.changed or allow_users_check.changed or
+        ssh_hardening_check.changed

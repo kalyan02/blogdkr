@@ -1,0 +1,93 @@
+---
+# System maintenance tasks for production
+- name: Clean package cache
+  apt:
+    autoclean: yes
+    autoremove: yes
+  become: yes
+
+- name: Check disk space
+  command: df -h
+  register: disk_space
+  changed_when: false
+
+- name: Display disk space
+  debug:
+    msg: "{{ disk_space.stdout_lines }}"
+
+- name: Check memory usage
+  command: free -h
+  register: memory_usage
+  changed_when: false
+
+- name: Display memory usage
+  debug:
+    msg: "{{ memory_usage.stdout_lines }}"
+
+- name: Check system load
+  command: uptime
+  register: system_load
+  changed_when: false
+
+- name: Display system load
+  debug:
+    msg: "{{ system_load.stdout }}"
+
+- name: Check failed login attempts
+  command: grep "Failed password" /var/log/auth.log | tail -10
+  register: failed_logins
+  changed_when: false
+  ignore_errors: yes
+
+- name: Display recent failed logins
+  debug:
+    msg: "{{ failed_logins.stdout_lines }}"
+  when: failed_logins.stdout_lines | length > 0
+
+- name: Check fail2ban status
+  command: fail2ban-client status sshd
+  register: fail2ban_sshd_status
+  changed_when: false
+  become: yes
+  ignore_errors: yes
+
+- name: Display fail2ban SSH status
+  debug:
+    msg: "{{ fail2ban_sshd_status.stdout_lines }}"
+  when: fail2ban_sshd_status.rc == 0
+
+- name: Check Docker status
+  command: systemctl is-active docker
+  register: docker_status
+  changed_when: false
+  become: yes
+
+- name: Ensure Docker is running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: yes
+  when: docker_status.stdout != "active"
+
+- name: Check UFW status
+  command: ufw status verbose
+  register: ufw_status
+  changed_when: false
+  become: yes
+
+- name: Display UFW status
+  debug:
+    msg: "{{ ufw_status.stdout_lines }}"
+
+- name: Clean old Docker images (optional)
+  command: docker system prune -f
+  become: yes
+  register: docker_cleanup
+  changed_when: docker_cleanup.stdout.find('deleted') != -1
+  ignore_errors: yes
+
+- name: Display Docker cleanup results
+  debug:
+    msg: "{{ docker_cleanup.stdout_lines }}"
+  when: docker_cleanup.changed

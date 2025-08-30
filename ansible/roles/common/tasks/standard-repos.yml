@@ -1,0 +1,182 @@
+---
+# Standardize Ubuntu repositories across all VPS providers and zones
+# Ensures consistent package versions regardless of deployment location
+
+- name: Backup original sources.list
+  copy:
+    src: /etc/apt/sources.list
+    dest: /etc/apt/sources.list.backup-{{ ansible_date_time.epoch }}
+    remote_src: yes
+  become: yes
+
+- name: Backup original sources.list.d directory
+  command: cp -r /etc/apt/sources.list.d /etc/apt/sources.list.d.backup-{{ ansible_date_time.epoch }}
+  become: yes
+  ignore_errors: yes
+
+- name: Configure standard Ubuntu repositories
+  copy:
+    content: |
+      # Standard Ubuntu 24.04 LTS repositories
+      # Configured by Ansible for consistency across all VPS providers
+      
+      # Main repositories
+      deb http://archive.ubuntu.com/ubuntu/ noble main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu/ noble-updates main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu/ noble-security main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu/ noble-backports main restricted universe multiverse
+      
+      # Security updates (alternative mirror)
+      deb http://security.ubuntu.com/ubuntu/ noble-security main restricted universe multiverse
+      
+      # Sources repositories (commented out to reduce bandwidth)
+      # deb-src http://archive.ubuntu.com/ubuntu/ noble main restricted universe multiverse
+      # deb-src http://archive.ubuntu.com/ubuntu/ noble-updates main restricted universe multiverse
+    dest: /etc/apt/sources.list
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+
+- name: Remove VPS provider specific repository files
+  file:
+    path: "{{ item }}"
+    state: absent
+  become: yes
+  loop:
+    - /etc/apt/sources.list.d/ubuntu.sources
+    - /etc/apt/sources.list.d/original.list
+    - /etc/apt/sources.list.d/provider.list
+    - /etc/apt/sources.list.d/system.sources
+  ignore_errors: yes
+
+- name: Check for additional provider repositories
+  find:
+    paths: /etc/apt/sources.list.d/
+    patterns: "*.list,*.sources"
+  register: existing_repos
+  become: yes
+
+- name: Display found repository files
+  debug:
+    msg: "Found repository files: {{ existing_repos.files | map(attribute='path') | list }}"
+  when: existing_repos.files | length > 0
+
+- name: Configure APT preferences to prioritize official Ubuntu sources
+  copy:
+    content: |
+      # APT Preferences for standardized package sources
+      # Prioritizes official Ubuntu repositories over VPS provider mirrors
+      
+      Package: *
+      Pin: origin archive.ubuntu.com
+      Pin-Priority: 1000
+      
+      Package: *
+      Pin: origin security.ubuntu.com
+      Pin-Priority: 1000
+      
+      # Lower priority for any other sources
+      Package: *
+      Pin: origin *
+      Pin-Priority: 500
+    dest: /etc/apt/preferences.d/00-ubuntu-official
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Configure APT to be more deterministic
+  copy:
+    content: |
+      # APT Configuration for reproducible builds
+      APT::Default-Release "noble";
+      APT::Install-Recommends "false";
+      APT::Install-Suggests "false";
+      APT::Get::Show-Versions "true";
+      
+      # Cache settings for consistency
+      Dir::Cache::pkgcache "pkgcache.bin";
+      Dir::Cache::srcpkgcache "srcpkgcache.bin";
+      
+      # Security settings
+      APT::Sandbox::User "root";
+      Acquire::AllowInsecureRepositories "false";
+      Acquire::AllowDowngradeToInsecureRepositories "false";
+    dest: /etc/apt/apt.conf.d/99-standardized-config
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Clean APT cache to ensure fresh package lists
+  apt:
+    autoclean: yes
+    autoremove: yes
+  become: yes
+
+- name: Update package cache with standardized repositories
+  apt:
+    update_cache: yes
+    cache_valid_time: 0
+    force_apt_get: yes
+  become: yes
+
+- name: Verify standard repositories are working
+  command: apt-cache policy
+  register: apt_policy_output
+  changed_when: false
+  become: yes
+
+- name: Display APT policy (for verification)
+  debug:
+    msg: "{{ apt_policy_output.stdout_lines[:20] }}"
+
+- name: Create repository standardization summary
+  copy:
+    content: |
+      # Repository Standardization Summary
+      # Generated on: {{ ansible_date_time.iso8601 }}
+      # Host: {{ ansible_hostname }}
+      # Applied by: Ansible
+      
+      ## Changes Made:
+      1. Replaced VPS provider repositories with official Ubuntu repositories
+      2. Configured APT preferences to prioritize archive.ubuntu.com
+      3. Set APT configuration for reproducible package management
+      4. Backed up original configuration files
+      
+      ## Standard Repositories:
+      - Main: http://archive.ubuntu.com/ubuntu/ noble
+      - Updates: http://archive.ubuntu.com/ubuntu/ noble-updates  
+      - Security: http://archive.ubuntu.com/ubuntu/ noble-security
+      - Backports: http://archive.ubuntu.com/ubuntu/ noble-backports
+      - Security Mirror: http://security.ubuntu.com/ubuntu/ noble-security
+      
+      ## Benefits:
+      - Consistent package versions across all VPS providers
+      - Predictable security updates
+      - Better compliance and auditing
+      - Reduced dependency on provider-specific mirrors
+      
+      ## Verification:
+      Run: apt-cache policy
+      Expected: Priority 1000 for archive.ubuntu.com sources
+    dest: /etc/apt/repository-standardization.txt
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Display repository standardization summary
+  debug:
+    msg:
+      - "Repository standardization completed successfully!"
+      - "- Official Ubuntu repositories configured"
+      - "- VPS provider mirrors deprioritized"
+      - "- APT preferences set for consistency"
+      - "- Original configs backed up with timestamp"
+      - "- Summary available: /etc/apt/repository-standardization.txt"
+      - ""
+      - "Next package installs will use standardized sources"

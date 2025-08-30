@@ -1,0 +1,65 @@
+---
+- name: Install fail2ban
+  apt:
+    name: fail2ban
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Create fail2ban jail.local configuration
+  copy:
+    content: |
+      [DEFAULT]
+      # Ban IP/hosts for 1 hour (3600 seconds)
+      bantime = 3600
+      
+      # An ip address/host is banned if it has generated "maxretry" during "findtime" seconds
+      findtime = 600
+      maxretry = 3
+      
+      # "ignoreip" can be a list of IP addresses, CIDR masks or DNS hosts
+      ignoreip = 127.0.0.1/8 ::1
+      
+      # Backend to use (systemd for newer systems)
+      backend = systemd
+      
+      [sshd]
+      enabled = true
+      port = {{ ssh_port }}
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 3600
+      findtime = 600
+      
+      [nginx-http-auth]
+      enabled = false
+      
+      [nginx-limit-req]
+      enabled = false
+      
+      [nginx-botsearch]
+      enabled = false
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  notify: restart fail2ban
+
+- name: Start and enable fail2ban service
+  systemd:
+    name: fail2ban
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Check fail2ban status
+  command: fail2ban-client status
+  register: fail2ban_status
+  become: yes
+  changed_when: false
+
+- name: Display fail2ban status
+  debug:
+    msg: "{{ fail2ban_status.stdout_lines }}"

@@ -1,0 +1,176 @@
+---
+# AIDE (Advanced Intrusion Detection Environment) setup for VPS
+# Optimized for small ARM VPS - monitors only critical directories
+
+- name: Install AIDE if not already installed
+  apt:
+    name: aide
+    state: present
+  become: yes
+
+- name: Create VPS-optimized AIDE configuration
+  copy:
+    content: |
+      # AIDE configuration for small VPS
+      # Monitor only critical system directories to minimize resource usage
+      
+      # Database locations
+      database=file:/var/lib/aide/aide.db
+      database_out=file:/var/lib/aide/aide.db.new
+      
+      # Configuration
+      gzip_dbout=yes
+      verbose=5
+      report_url=file:/var/log/aide/aide.log
+      
+      # Rules - VPS optimized (monitor only essential directories)
+      NORMAL = p+i+n+u+g+s+m+c+md5+sha256
+      DIR = p+i+n+u+g
+      DATAONLY = p+n+u+g+s+acl+selinux+xattrs+md5+sha256+rmd160+tiger
+      
+      # Critical system directories only (VPS optimized)
+      /etc NORMAL
+      /bin NORMAL
+      /sbin NORMAL
+      /usr/bin NORMAL
+      /usr/sbin NORMAL
+      /usr/local/bin NORMAL
+      /usr/local/sbin NORMAL
+      /boot NORMAL
+      
+      # Exclude dynamic/temporary directories to reduce load
+      !/etc/mtab$
+      !/etc/.*~
+      !/etc/passwd-$
+      !/etc/group-$
+      !/etc/shadow-$
+      !/etc/gshadow-$
+      !/etc/aide/aide.conf.autosave$
+      !/etc/exports$
+      !/etc/fstab.REVOKE$
+      !/etc/issue.net$
+      !/etc/motd$
+      !/etc/printcap$
+      
+      # Skip volatile system areas for VPS performance
+      !/var
+      !/tmp
+      !/home
+      !/proc
+      !/sys
+      !/dev
+      !/run
+    dest: /etc/aide/aide.conf
+    owner: root
+    group: root
+    mode: '0600'
+    backup: yes
+  become: yes
+
+- name: Create AIDE log directory
+  file:
+    path: /var/log/aide
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+
+- name: Check if AIDE database exists
+  stat:
+    path: /var/lib/aide/aide.db
+  register: aide_db_exists
+  become: yes
+
+- name: Initialize AIDE database (may take a few minutes on first run)
+  shell: |
+    cd /tmp
+    aideinit 2>&1 | tee /var/log/aide/aideinit.log
+  become: yes
+  when: not aide_db_exists.stat.exists
+  async: 300
+  poll: 10
+
+- name: Move newly created database to proper location
+  command: mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+  become: yes
+  when: not aide_db_exists.stat.exists
+  ignore_errors: yes
+
+- name: Create VPS-friendly AIDE check script
+  copy:
+    content: |
+      #!/bin/bash
+      # AIDE integrity check script optimized for VPS
+      # Runs with nice priority to avoid impacting server performance
+      
+      LOGFILE="/var/log/aide/aide.log"
+      TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+      
+      echo "[$TIMESTAMP] Starting AIDE integrity check..." >> $LOGFILE
+      
+      # Run AIDE with lower priority (nice) to avoid impacting VPS performance
+      nice -n 10 aide --check 2>&1 >> $LOGFILE
+      AIDE_EXIT_CODE=$?
+      
+      echo "[$TIMESTAMP] AIDE check completed with exit code: $AIDE_EXIT_CODE" >> $LOGFILE
+      
+      # Exit codes: 0=no changes, 1=new files, 2=removed files, 3=changed files
+      # For VPS, we only alert on actual changes (codes 2 and 3)
+      if [ $AIDE_EXIT_CODE -eq 2 ] || [ $AIDE_EXIT_CODE -eq 3 ]; then
+          echo "[$TIMESTAMP] WARNING: File integrity violations detected!" >> $LOGFILE
+          # Could add notification here if needed
+      fi
+      
+      # Rotate log if it gets too large (keep VPS disk usage low)
+      if [ $(stat -f%z "$LOGFILE" 2>/dev/null || stat -c%s "$LOGFILE") -gt 1048576 ]; then
+          mv "$LOGFILE" "${LOGFILE}.old"
+          echo "[$TIMESTAMP] Log rotated due to size" > "$LOGFILE"
+      fi
+      
+      exit $AIDE_EXIT_CODE
+    dest: /usr/local/bin/aide-check.sh
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+
+- name: Setup weekly AIDE integrity check (VPS-friendly schedule)
+  cron:
+    name: "AIDE integrity check"
+    minute: "0"
+    hour: "3"
+    weekday: "0"
+    user: root
+    job: "/usr/local/bin/aide-check.sh"
+    cron_file: aide
+  become: yes
+
+- name: Setup log rotation for AIDE logs
+  copy:
+    content: |
+      /var/log/aide/aide.log {
+          weekly
+          rotate 4
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 640 root adm
+      }
+    dest: /etc/logrotate.d/aide
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Display AIDE setup summary
+  debug:
+    msg:
+      - "AIDE configured for VPS optimization:"
+      - "- Monitoring critical directories only: /etc, /bin, /sbin, /usr/bin, /usr/sbin"
+      - "- Weekly integrity checks scheduled for Sunday 3 AM"
+      - "- Low-priority execution to avoid VPS performance impact"
+      - "- Logs: /var/log/aide/aide.log"
+      - "- Manual check: /usr/local/bin/aide-check.sh"
+      - "- Update database after changes: aide --update && mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db"

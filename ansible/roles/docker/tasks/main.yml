@@ -1,0 +1,131 @@
+---
+- name: Remove old Docker packages
+  apt:
+    name:
+      - docker
+      - docker-engine
+      - docker.io
+      - containerd
+      - runc
+    state: absent
+  become: yes
+  when: ansible_os_family == "Debian"
+
+- name: Add Docker GPG apt key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+  become: yes
+  when: ansible_os_family == "Debian"
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+    state: present
+  become: yes
+  when: ansible_os_family == "Debian"
+
+- name: Update apt cache after adding Docker repo
+  apt:
+    update_cache: yes
+  become: yes
+  when: ansible_os_family == "Debian"
+
+- name: Install Docker CE
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+  become: yes
+  when: ansible_os_family == "Debian"
+
+- name: Create docker group
+  group:
+    name: docker
+    state: present
+  become: yes
+
+- name: Add {{ the_user }} to docker group
+  user:
+    name: "{{ the_user }}"
+    groups: docker
+    append: yes
+  become: yes
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Remove existing docker-compose if present
+  file:
+    path: /usr/local/bin/docker-compose
+    state: absent
+  become: yes
+
+- name: Get system architecture
+  command: uname -m
+  register: system_arch
+  changed_when: false
+
+- name: Display detected architecture
+  debug:
+    msg: "Detected architecture: {{ system_arch.stdout }}"
+
+- name: Set Docker Compose architecture mapping
+  set_fact:
+    docker_compose_arch: >-
+      {%- if system_arch.stdout == 'x86_64' -%}
+      x86_64
+      {%- elif system_arch.stdout == 'aarch64' -%}
+      aarch64
+      {%- elif system_arch.stdout == 'armv7l' -%}
+      armv7
+      {%- else -%}
+      x86_64
+      {%- endif -%}
+
+- name: Display Docker Compose architecture to download
+  debug:
+    msg: "Will download Docker Compose for: {{ docker_compose_arch }}"
+
+- name: Install Docker Compose (standalone binary)
+  get_url:
+    url: "https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-{{ docker_compose_arch }}"
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+
+- name: Create symlink for docker-compose
+  file:
+    src: /usr/local/bin/docker-compose
+    dest: /usr/bin/docker-compose
+    state: link
+  become: yes
+
+- name: Test Docker installation
+  command: docker --version
+  register: docker_version
+  become: yes
+
+- name: Test Docker Compose installation
+  command: docker-compose --version
+  register: docker_compose_version
+  become: yes
+
+- name: Display Docker versions
+  debug:
+    msg: 
+      - "Docker installed: {{ docker_version.stdout }}"
+      - "Docker Compose installed: {{ docker_compose_version.stdout }}"
+
+# Include Docker security tasks
+- include_tasks: security.yml

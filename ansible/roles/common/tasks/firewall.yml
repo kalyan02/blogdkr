@@ -1,0 +1,77 @@
+---
+- name: Install UFW firewall
+  apt:
+    name: ufw
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Reset UFW to defaults
+  ufw:
+    state: reset
+  become: yes
+
+- name: Set UFW default policies
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+  become: yes
+
+- name: Set UFW default outgoing policy
+  ufw:
+    state: enabled
+    policy: allow
+    direction: outgoing
+  become: yes
+
+- name: Allow SSH on port 22 (initial connection)
+  ufw:
+    rule: allow
+    port: '22'
+    proto: tcp
+    state: enabled
+  become: yes
+  when: ansible_port == 22
+
+- name: Allow SSH on port 2222 (after SSH hardening)
+  ufw:
+    rule: allow
+    port: '2222'
+    proto: tcp
+    state: enabled
+  become: yes
+
+- name: Allow Mosh on port 2222 (UDP)
+  ufw:
+    rule: allow
+    port: '2222'
+    proto: udp
+    state: enabled
+  become: yes
+
+- name: Allow HTTP port 80
+  ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+    state: enabled
+  become: yes
+
+- name: Allow HTTPS port 443
+  ufw:
+    rule: allow
+    port: '443'
+    proto: tcp
+    state: enabled
+  become: yes
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+  become: yes
+
+- name: Set UFW logging
+  ufw:
+    logging: 'on'
+  become: yes

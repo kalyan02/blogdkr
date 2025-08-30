@@ -1,0 +1,104 @@
+---
+# Service banners and legal warnings for security compliance
+# Configures generic banners and legal notices
+
+- name: Create legal warning banner for console login
+  copy:
+    content: |
+      
+      ************************************************************************
+      *                        AUTHORIZED ACCESS ONLY                       *
+      ************************************************************************
+      *                                                                      *
+      * This computer system is for authorized users only. All activities   *
+      * on this system are monitored and recorded. Unauthorized access is   *
+      * strictly prohibited and may result in prosecution under applicable  *
+      * laws. By continuing, you acknowledge that you have read and agree   *
+      * to these terms.                                                     *
+      *                                                                      *
+      ************************************************************************
+      
+    dest: /etc/issue
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+
+- name: Create legal warning banner for network login
+  copy:
+    content: |
+      
+      ************************************************************************
+      *                        AUTHORIZED ACCESS ONLY                       *
+      ************************************************************************
+      *                                                                      *
+      * This computer system is for authorized users only. All activities   *
+      * on this system are monitored and recorded. Unauthorized access is   *
+      * strictly prohibited and may result in prosecution under applicable  *
+      * laws. By continuing, you acknowledge that you have read and agree   *
+      * to these terms.                                                     *
+      *                                                                      *
+      ************************************************************************
+      
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+
+# Postfix removed for VPS optimization - not needed for WordPress setup
+
+- name: Remove system information from MOTD
+  file:
+    path: "{{ item }}"
+    state: absent
+  become: yes
+  loop:
+    - /etc/motd
+    - /etc/update-motd.d/10-help-text
+    - /etc/update-motd.d/50-motd-news
+    - /etc/update-motd.d/80-esm
+    - /etc/update-motd.d/95-hwe-eol
+  ignore_errors: yes
+
+- name: Create minimal MOTD
+  copy:
+    content: |
+      Welcome to this system.
+      
+      All activities are monitored and logged.
+      Unauthorized access is prohibited.
+      
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Disable Ubuntu Pro advertising in MOTD
+  lineinfile:
+    dest: /etc/default/motd-news
+    regexp: "^ENABLED"
+    line: "ENABLED=0"
+    state: present
+    create: yes
+  become: yes
+  ignore_errors: yes
+
+- name: Remove system info disclosure from SSH
+  file:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    state: absent
+  become: yes
+  ignore_errors: yes
+
+- name: Display banner configuration summary
+  debug:
+    msg:
+      - "Service banners configured:"
+      - "- Legal warning banners: /etc/issue and /etc/issue.net"
+      - "- Minimal MOTD created (removed system info disclosure)"
+      - "- Ubuntu Pro advertising disabled"
+      - "- Postfix removed (not needed for WordPress setup)"

@@ -1,0 +1,131 @@
+---
+# Service hardening - disable unnecessary services for lean and secure setup
+- name: Disable unnecessary services for lean setup
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+    masked: yes
+  become: yes
+  loop:
+    - atd.service              # Deferred execution scheduler - rarely needed
+    - apport.service           # Crash report generation - not needed on servers
+    - sysstat.service          # System activity logging - unless monitoring needed
+  ignore_errors: yes
+
+- name: Disable VM-specific services if not in VM
+  systemd:
+    name: qemu-guest-agent.service
+    state: stopped
+    enabled: no
+    masked: yes
+  become: yes
+  when: ansible_virtualization_type != "kvm"
+  ignore_errors: yes
+
+- name: Disable Plymouth boot services (not needed on servers)
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+    masked: yes
+  become: yes
+  loop:
+    - plymouth-quit-wait.service
+    - plymouth-quit.service
+    - plymouth-read-write.service
+  ignore_errors: yes
+
+- name: Ensure unattended upgrades is enabled for security
+  systemd:
+    name: unattended-upgrades.service
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Configure unattended upgrades for security only
+  copy:
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+          "${distro_id}ESMApps:${distro_codename}-apps-security";
+          "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::MinimalSteps "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      Unattended-Upgrade::Automatic-Reboot-Time "02:00";
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Disable unnecessary kernel modules
+  copy:
+    content: |
+      # Disable unnecessary kernel modules for security
+      blacklist bluetooth
+      blacklist btusb
+      blacklist cramfs
+      blacklist freevxfs
+      blacklist jffs2
+      blacklist hfs
+      blacklist hfsplus
+      blacklist squashfs
+      blacklist udf
+    dest: /etc/modprobe.d/blacklist-unnecessary.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Remove unnecessary packages
+  apt:
+    name:
+      - at                     # at daemon package
+      - apport                 # crash reporting
+      - popularity-contest     # sends usage statistics
+      - whoopsie              # error reporting
+      - postfix               # mail server (not needed for WordPress)
+      - sendmail              # alternative mail server
+    state: absent
+    purge: yes
+  become: yes
+  ignore_errors: yes
+
+- name: Verify essential services are running
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  become: yes
+  loop:
+    - ssh.service
+    - rsyslog.service
+    - systemd-networkd.service
+    - systemd-resolved.service
+    - ufw.service
+    - docker.service
+    - unattended-upgrades.service
+  ignore_errors: yes
+
+- name: Display disabled services summary
+  debug:
+    msg: |
+      Services disabled for lean setup:
+      - atd (deferred execution scheduler)
+      - apport (crash reporting)
+      - sysstat (system activity logging)
+      - qemu-guest-agent (if not in VM)
+      - plymouth services (boot splash)
+      
+      Services kept for security:
+      - unattended-upgrades (security patches only)
+      
+      Packages removed:
+      - at, apport, popularity-contest, whoopsie
+      
+      Kernel modules blacklisted:
+      - bluetooth, cramfs, freevxfs, jffs2, hfs, hfsplus, squashfs, udf

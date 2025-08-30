@@ -1,0 +1,19 @@
+# Configuration variables for the server setup
+# Edit these values according to your setup
+
+# User configuration
+the_user: kalyan
+
+# Network configuration  
+ssh_port: 2222
+hostname: devnetsec.lonefish.net
+
+# System configuration
+swap_file_path: /swapfile
+swap_file_size: 2G
+
+# SSH public keys to install
+ssh_public_keys:
+  - "~/.ssh/devnetsec_ed25519.pub"
+  # Add more keys as needed:
+  # - "~/.ssh/another_key.pub"

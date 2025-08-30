@@ -1,0 +1,129 @@
+---
+- name: Install security packages
+  apt:
+    name:
+      - rkhunter
+      - chkrootkit
+      - lynis
+      - aide
+      - debsums
+      - libpam-pwquality
+    state: present
+  become: yes
+
+- name: Configure kernel parameters for security
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-security.conf
+  become: yes
+  loop:
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+    - { name: 'net.ipv4.conf.all.send_redirects', value: '0' }
+    - { name: 'net.ipv4.conf.default.send_redirects', value: '0' }
+    - { name: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+    - { name: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+    - { name: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+    - { name: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+    - { name: 'net.ipv4.conf.all.log_martians', value: '1' }
+    - { name: 'net.ipv4.conf.default.log_martians', value: '1' }
+    - { name: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+    - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+    - { name: 'net.ipv4.tcp_syncookies', value: '1' }
+    - { name: 'kernel.dmesg_restrict', value: '1' }
+    - { name: 'kernel.kptr_restrict', value: '2' }
+    - { name: 'kernel.yama.ptrace_scope', value: '1' }
+
+- name: Secure shared memory
+  mount:
+    name: /run/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,noexec,nosuid,nodev,size=100M
+    state: mounted
+  become: yes
+
+- name: Set up logrotate for security logs
+  copy:
+    content: |
+      /var/log/auth.log {
+          weekly
+          rotate 4
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 640 root adm
+      }
+    dest: /etc/logrotate.d/security
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Disable unused network protocols
+  copy:
+    content: |
+      # Disable rare network protocols
+      install dccp /bin/true
+      install sctp /bin/true
+      install rds /bin/true
+      install tipc /bin/true
+    dest: /etc/modprobe.d/blacklist-rare-network.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Set file permissions on sensitive files
+  file:
+    path: "{{ item }}"
+    mode: '0600'
+  become: yes
+  loop:
+    - /etc/shadow
+    - /etc/gshadow
+    - /etc/ssh/sshd_config
+    - /etc/crontab
+  ignore_errors: yes
+
+- name: Secure cron directories
+  file:
+    path: "{{ item }}"
+    mode: '0700'
+    owner: root
+    group: root
+  become: yes
+  loop:
+    - /etc/cron.d
+    - /etc/cron.daily
+    - /etc/cron.hourly
+    - /etc/cron.monthly
+    - /etc/cron.weekly
+  ignore_errors: yes
+
+- name: Configure process accounting
+  apt:
+    name: acct
+    state: present
+  become: yes
+
+- name: Start process accounting
+  systemd:
+    name: acct
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Apply AIDE file integrity monitoring
+  include_tasks: aide.yml
+
+- name: Apply authentication hardening
+  include_tasks: auth-hardening.yml
+
+- name: Configure service banners
+  include_tasks: banners.yml
+
+- name: Apply service hardening
+  include_tasks: service-hardening.yml

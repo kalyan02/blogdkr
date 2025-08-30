@@ -1,0 +1,106 @@
+---
+# Authentication hardening for improved password security
+# Implements stronger password policies and authentication controls
+
+- name: Backup original login.defs
+  copy:
+    src: /etc/login.defs
+    dest: /etc/login.defs.backup
+    remote_src: yes
+  become: yes
+
+- name: Configure password aging policies
+  lineinfile:
+    dest: /etc/login.defs
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }}\t{{ item.value }}"
+    state: present
+  become: yes
+  loop:
+    - { key: 'PASS_MAX_DAYS', value: '90' }
+    - { key: 'PASS_MIN_DAYS', value: '7' }
+    - { key: 'PASS_MIN_LEN', value: '12' }
+    - { key: 'PASS_WARN_AGE', value: '7' }
+
+- name: Configure default umask for enhanced security
+  lineinfile:
+    dest: /etc/login.defs
+    regexp: "^UMASK"
+    line: "UMASK\t\t027"
+    state: present
+  become: yes
+
+- name: Configure SHA encryption rounds for password hashing
+  lineinfile:
+    dest: /etc/login.defs
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }}\t{{ item.value }}"
+    state: present
+  become: yes
+  loop:
+    - { key: 'SHA_CRYPT_MIN_ROUNDS', value: '10000' }
+    - { key: 'SHA_CRYPT_MAX_ROUNDS', value: '50000' }
+
+- name: Configure login timeout settings
+  lineinfile:
+    dest: /etc/login.defs
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }}\t{{ item.value }}"
+    state: present
+  become: yes
+  loop:
+    - { key: 'LOGIN_TIMEOUT', value: '60' }
+    - { key: 'LOGIN_RETRIES', value: '3' }
+
+- name: Configure user creation defaults
+  lineinfile:
+    dest: /etc/login.defs
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }}\t{{ item.value }}"
+    state: present
+  become: yes
+  loop:
+    - { key: 'CREATE_HOME', value: 'yes' }
+    - { key: 'USERGROUPS_ENAB', value: 'yes' }
+
+- name: Ensure proper file permissions on login.defs
+  file:
+    path: /etc/login.defs
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Configure PAM password requirements (if libpam-pwquality available)
+  copy:
+    content: |
+      # Password quality requirements
+      # Require at least 12 characters with complexity
+      minlen = 12
+      minclass = 3
+      maxrepeat = 2
+      maxsequence = 3
+      gecoscheck = 1
+      dictcheck = 1
+      usercheck = 1
+      enforcing = 1
+    dest: /etc/security/pwquality.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+  ignore_errors: yes
+
+- name: Display authentication hardening summary
+  debug:
+    msg:
+      - "Authentication hardening applied:"
+      - "- Password max age: 90 days"
+      - "- Password min age: 7 days"  
+      - "- Minimum password length: 12 characters"
+      - "- Default umask: 027 (more restrictive file permissions)"
+      - "- SHA encryption rounds: 10,000-50,000 (stronger hashing)"
+      - "- Login timeout: 60 seconds"
+      - "- Login retries: 3 attempts"
+      - "- Password complexity requirements enabled (if pwquality installed)"

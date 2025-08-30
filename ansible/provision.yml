@@ -1,0 +1,32 @@
+---
+# Minimal initial server provisioning - run ONCE on fresh server
+# Only handles essential, irreversible steps
+- hosts: provision
+  gather_facts: yes
+  vars_files:
+    - vars.yml
+    
+  tasks:
+  - name: Test initial connectivity
+    ping:
+    
+  - name: Update system packages (minimal)
+    apt:
+      update_cache: yes
+      upgrade: safe
+    become: yes
+    
+  - name: Setup custom user
+    include_tasks: "roles/common/tasks/user_setup.yml"
+    
+  - name: Harden SSH configuration (CHANGES PORT!)
+    include_tasks: "roles/common/tasks/sshd.yml"
+    
+  - name: Remove root access (FINAL STEP)
+    include_tasks: "roles/common/tasks/root_cleanup.yml"
+
+  handlers:
+  - name: restart sshd
+    service:
+      name: ssh
+      state: restarted

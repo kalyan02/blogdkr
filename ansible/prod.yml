@@ -1,0 +1,71 @@
+---
+# Production maintenance - run MULTIPLE times safely (idempotent)
+- hosts: production
+  gather_facts: yes
+  vars_files:
+    - vars.yml
+    
+  tasks:
+  - name: Test connectivity
+    ping:
+    
+  - name: Configure hostname
+    include_tasks: "roles/common/tasks/hostname.yml"
+    
+  - name: Update system packages
+    include_tasks: "roles/common/tasks/system_update.yml"
+    
+  - name: Ensure custom user exists and is configured
+    include_tasks: "roles/common/tasks/user_setup.yml"
+    
+  - name: Ensure swap is configured
+    include_tasks: "roles/common/tasks/swap.yml"
+    
+  - name: Ensure Docker is installed and updated
+    include_tasks: "roles/docker/tasks/main.yml"
+    tags: docker
+    
+  - name: Maintain SSH hardening (idempotent)
+    include_tasks: "roles/common/tasks/sshd_prod.yml"
+    
+  - name: Maintain UFW firewall rules
+    include_tasks: "roles/common/tasks/firewall.yml"
+    
+  - name: Maintain fail2ban configuration
+    include_tasks: "roles/common/tasks/fail2ban.yml"
+    
+  - name: Maintain security hardening
+    include_tasks: "roles/security/tasks/main.yml"
+    
+  - name: Install development tools
+    include_tasks: "roles/common/tasks/tools.yml"
+    
+  - name: System maintenance tasks
+    include_tasks: "roles/common/tasks/maintenance.yml"
+
+  handlers:
+  - name: restart sshd
+    service:
+      name: ssh
+      state: restarted
+      
+  - name: restart docker
+    service:
+      name: docker
+      state: restarted
+      
+  - name: restart fail2ban
+    service:
+      name: fail2ban
+      state: restarted
+    become: yes
+      
+  - name: restart ufw
+    service:
+      name: ufw
+      state: restarted
+      
+  - name: restart postfix
+    service:
+      name: postfix
+      state: restarted

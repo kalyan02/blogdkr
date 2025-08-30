@@ -1,0 +1,24 @@
+---
+# Configure server hostname
+- name: Set hostname
+  hostname:
+    name: "{{ hostname }}"
+  become: yes
+  when: hostname is defined
+
+- name: Update /etc/hosts with new hostname
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ hostname }}"
+    state: present
+  become: yes
+  when: hostname is defined
+
+- name: Ensure localhost entry exists in /etc/hosts
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '^127\.0\.0\.1'
+    line: "127.0.0.1 localhost"
+    state: present
+  become: yes

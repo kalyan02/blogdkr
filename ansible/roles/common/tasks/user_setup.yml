@@ -1,0 +1,83 @@
+---
+- name: Create {{ the_user }} user
+  user:
+    name: "{{ the_user }}"
+    groups: sudo
+    shell: /bin/bash
+    createhome: yes
+    state: present
+  become: yes
+
+# - name: Ensure account is unlocked
+#   command: passwd -u {{ the_user }}
+#   become: yes
+#   ignore_errors: no
+
+- name: Create .ssh directory for {{ the_user }}
+  file:
+    path: "/home/{{ the_user }}/.ssh"
+    state: directory
+    mode: '0700'
+    owner: "{{ the_user }}"
+    group: "{{ the_user }}"
+  become: yes
+
+- name: Add SSH public keys for {{ the_user }}
+  authorized_key:
+    user: "{{ the_user }}"
+    state: present
+    key: "{{ lookup('file', item) }}"
+  with_items: "{{ ssh_public_keys }}"
+  become: yes
+
+- name: Verify authorized_keys file was created
+  stat:
+    path: "/home/{{ the_user }}/.ssh/authorized_keys"
+  register: auth_keys_file
+  become: yes
+
+- name: Display authorized_keys status
+  debug:
+    msg: "authorized_keys exists: {{ auth_keys_file.stat.exists }}, size: {{ auth_keys_file.stat.size | default('N/A') }}"
+
+- name: Add {{ the_user }} to sudoers with NOPASSWD
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    regexp: '^{{ the_user }}'
+    line: '{{ the_user }} ALL=(ALL) NOPASSWD: ALL'
+    validate: 'visudo -cf %s'
+  become: yes
+
+- name: Set up bashrc for {{ the_user }}
+  copy:
+    content: |
+      # Custom bashrc
+      export PS1='\u@\h:\w$ '
+      export EDITOR=vim
+      alias ll='ls -alF'
+      alias la='ls -A'
+      alias l='ls -CF'
+      alias grep='grep --color=auto'
+      
+      # Docker aliases
+      alias dc='docker-compose'
+      alias d='docker'
+    dest: "/home/{{ the_user }}/.bashrc"
+    owner: "{{ the_user }}"
+    group: "{{ the_user }}"
+    mode: '0644'
+  become: yes
+
+- name: Set up bash_profile to source bashrc
+  copy:
+    content: |
+      # Source bashrc if it exists
+      if [ -f ~/.bashrc ]; then
+          source ~/.bashrc
+      fi
+    dest: "/home/{{ the_user }}/.bash_profile"
+    owner: "{{ the_user }}"
+    group: "{{ the_user }}"
+    mode: '0644'
+  become: yes

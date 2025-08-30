@@ -1,0 +1,128 @@
+---
+# Docker daemon security configuration
+# Applies security hardening to Docker daemon for improved container security
+
+- name: Create Docker daemon configuration directory
+  file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+
+- name: Configure Docker daemon security settings (VPS-friendly)
+  copy:
+    content: |
+      {
+        "live-restore": true,
+        "userland-proxy": false,
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        },
+        "storage-driver": "overlay2",
+        "experimental": false,
+        "iptables": true,
+        "ipv6": false,
+        "disable-legacy-registry": true
+      }
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+
+# User namespace remapping removed - too complex for VPS and breaks existing containers
+
+- name: Note Docker restart needed
+  debug:
+    msg:
+      - "Docker daemon.json updated"
+      - "Manual restart required: sudo systemctl restart docker"
+      - "Or apply during next maintenance window"
+
+- name: Create Docker security profile template
+  copy:
+    content: |
+      # Docker Security Best Practices for Containers
+      # Use this as reference when running containers
+      
+      # Run containers with non-root user:
+      # docker run --user 1000:1000 ...
+      
+      # Drop capabilities and add only needed ones:
+      # docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE ...
+      
+      # Use read-only root filesystem:
+      # docker run --read-only ...
+      
+      # Limit resources:
+      # docker run --memory=512m --cpus=1 ...
+      
+      # Use no-new-privileges:
+      # docker run --security-opt=no-new-privileges ...
+      
+      # Set AppArmor/SELinux profile:
+      # docker run --security-opt apparmor=docker-default ...
+      
+      # Bind mount only necessary volumes:
+      # docker run -v /host/path:/container/path:ro ...
+    dest: /etc/docker/security-guidelines.txt
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Fix docker firewall overrides
+  # https://github.com/chaifeng/ufw-docker
+  # for making 8000 accessible - ufw route allow proto tcp from any to any port 8000
+  tags: docker-firewall-fix
+  blockinfile:
+    marker: "# <!-- {mark} ANSIBLE MANAGED BLOCK -->"
+    block: |
+      # BEGIN UFW AND DOCKER
+      # https://github.com/chaifeng/ufw-docker
+      # for making 8000 accessible - ufw route allow proto tcp from any to any port 8000
+      *filter
+      :ufw-user-forward - [0:0]
+      :ufw-docker-logging-deny - [0:0]
+      :DOCKER-USER - [0:0]
+      -A DOCKER-USER -j ufw-user-forward
+
+      -A DOCKER-USER -j RETURN -s 10.0.0.0/8
+      -A DOCKER-USER -j RETURN -s 172.16.0.0/12
+      -A DOCKER-USER -j RETURN -s 192.168.0.0/16
+
+      -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
+      -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
+      -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
+      -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
+      -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
+      -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
+      -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+
+      -A DOCKER-USER -j RETURN
+
+      -A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+      -A ufw-docker-logging-deny -j DROP
+
+      COMMIT
+      # END UFW AND DOCKER
+    path: /etc/ufw/after.rules
+  become: yes
+
+- name: Display Docker security configuration summary
+  debug:
+    msg:
+      - "Docker security hardening applied (VPS-optimized):"
+      - "- Live restore enabled (containers survive daemon restarts)"
+      - "- Userland proxy disabled (better performance)"
+      - "- Log rotation configured (10MB max, 3 files)"
+      - "- Legacy registry access disabled"
+      - "- UFW Docker firewall integration configured"
+      - "- Security guidelines: /etc/docker/security-guidelines.txt"
+      - "- Aggressive settings removed to maintain VPS compatibility"
