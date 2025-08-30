@@ -67,6 +67,7 @@ func LoadConfigTOML(path string) (Config, error) {
 type ContentConfig struct {
 	ContentDir     string   `toml:"content_dir"`
 	StaticDirs     []string `toml:"static_dirs"`
+	UploadDir      string   `toml:"upload_dir,omitempty"`
 	ThemeDir       string   `toml:"theme_dir,omitempty"`
 	Addr           string   `toml:"addr"`
 	DefaultNewHint string   `toml:"default_new_hint"`
@@ -77,6 +78,7 @@ type ContentConfig struct {
 var DefaultConfig = ContentConfig{
 	ContentDir:     "content/content",
 	StaticDirs:     []string{"content/static"},
+	UploadDir:      "content/uploads",
 	SidecarDB:      "content/sqlite.db",
 	DefaultNewHint: "blog",
 	Addr:           ":8081",

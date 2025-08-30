@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -31,7 +33,13 @@ func runCmdExec(cmd *cobra.Command, args []string) {
 		if err != nil {
 			log.Fatalf("error loading config from %s: %v", configPath, err)
 		}
+	} else if _, err := os.Stat("config.toml"); err == nil {
+		cfg, err = config.LoadConfigTOML("config.toml")
+		if err != nil {
+			log.Fatalf("error loading config from config.toml: %v", err)
+		}
 	} else {
+		log.Warn("No config file specified and config.toml not found. Using default configuration.")
 		cfg = config.NewDefaultConfig()
 	}
 

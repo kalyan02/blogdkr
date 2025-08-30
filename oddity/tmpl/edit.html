@@ -232,12 +232,20 @@
                     </h3>
                     <div v-show="sections.fileupload">
                         <!-- Upload Area -->
-                        <div @click="triggerFileInput" @drop="handleDrop" @dragover.prevent @dragenter.prevent @dragleave.prevent
+                        <div @click="triggerFileInput" @drop="handleDrop" 
+                             @dragover.prevent="isDragOver = true" 
+                             @dragenter.prevent="isDragOver = true" 
+                             @dragleave.prevent="isDragOver = false"
                              class="border-2 border-dashed border-gray-300 p-3 text-center text-gray-600 mb-3 cursor-pointer bg-gray-50 text-xs hover:border-blue-500 hover:bg-blue-50 transition-colors rounded"
                              :class="{ 'border-blue-500 bg-blue-50 text-blue-600': isDragOver }">
                             Drop files here or click to upload
                         </div>
                         <input ref="fileInput" type="file" multiple class="hidden" @change="handleFileSelect">
+                        
+                        <!-- Upload Progress -->
+                        <div v-if="uploading" class="mb-3 text-xs text-blue-600">
+                            Uploading... [[ uploadProgress ]]%
+                        </div>
                         
                         <!-- File List -->
                         <div class="space-y-1">
@@ -413,6 +421,8 @@
                     distractionFree: false,
                     sidebarVisible: true,
                     isDragOver: false,
+                    uploading: false,
+                    uploadProgress: 0,
                     sidebarBelow: false,
                     editorWidth: 'normal',
                     searchQuery: '',
@@ -433,11 +443,7 @@
                         // { name: 'Files', href: '/admin/files', emoji: '🗂️' },
                         { name: 'Preview', href: '/preview/untitled', target: '_blank', emoji: '👁️', primary: true }
                     ],
-                    files: [
-                        { id: 1, name: 'image1.jpg', type: 'image', menuOpen: false, resizeOpen: false, resizeWidth: '', resizeHeight: '' },
-                        { id: 2, name: 'document.pdf', type: 'file', menuOpen: false },
-                        { id: 3, name: 'screenshot.png', type: 'image', menuOpen: false, resizeOpen: false, resizeWidth: '', resizeHeight: '' }
-                    ],
+                    files: [],
                     searchResults: [
                         { id: 1, title: 'Getting Started' },
                         { id: 2, title: 'Features Overview' },
@@ -551,6 +557,11 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     if (section === 'history' && this.sections.history && this.history.length === 0) {
                         this.loadHistory();
                     }
+                    
+                    // Load files when file upload section is opened
+                    if (section === 'fileupload' && this.sections.fileupload && this.files.length === 0) {
+                        this.loadFiles();
+                    }
                 },
                 autoResize(event) {
                     console.log("Auto resizing editor")
@@ -564,25 +575,95 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 handleFileSelect(event) {
                     const files = Array.from(event.target.files)
-                    files.forEach(file => this.addFile(file))
+                    this.uploadFiles(files)
                 },
                 handleDrop(event) {
                     event.preventDefault()
                     this.isDragOver = false
                     const files = Array.from(event.dataTransfer.files)
-                    files.forEach(file => this.addFile(file))
+                    this.uploadFiles(files)
                 },
-                addFile(file) {
-                    const newFile = {
-                        id: Date.now() + Math.random(),
-                        name: file.name,
-                        type: file.type.startsWith('image/') ? 'image' : 'file',
-                        menuOpen: false,
-                        resizeOpen: false,
-                        resizeWidth: '',
-                        resizeHeight: ''
+                async uploadFiles(files) {
+                    if (this.uploading) return
+                    
+                    this.uploading = true
+                    this.uploadProgress = 0
+
+                    const formData = new FormData()
+                    files.forEach(file => {
+                        formData.append('files', file)
+                    })
+                    formData.append('fullSlug', defaultLoadedData.fullSlug || '')
+
+                    try {
+                        const response = await fetch('/admin/upload', {
+                            method: 'POST',
+                            body: formData
+                        })
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`)
+                        }
+
+                        const data = await response.json()
+                        
+                        // Add uploaded files to the UI
+                        for (const file of files) {
+                            const newFile = {
+                                id: Date.now() + Math.random(),
+                                name: file.name,
+                                type: file.type.startsWith('image/') ? 'image' : 'file',
+                                menuOpen: false,
+                                resizeOpen: false,
+                                resizeWidth: '',
+                                resizeHeight: '',
+                                uploaded: true
+                            }
+                            this.files.push(newFile)
+                        }
+
+                        this.uploadProgress = 100
+                        console.log('Files uploaded successfully:', data.uploaded)
+                        
+                    } catch (error) {
+                        console.error('Error uploading files:', error)
+                        alert('Error uploading files: ' + error.message)
+                    } finally {
+                        this.uploading = false
+                        this.uploadProgress = 0
+                        // Clear the file input
+                        this.$refs.fileInput.value = ''
                     }
-                    this.files.push(newFile)
+                },
+                async loadFiles() {
+                    if (!defaultLoadedData.fullSlug) return
+
+                    try {
+                        const response = await fetch(`/admin/uploads-list?fullSlug=${encodeURIComponent(defaultLoadedData.fullSlug)}`)
+                        
+                        if (!response.ok) {
+                            if (response.status === 404) {
+                                // No files found, that's okay
+                                return
+                            }
+                            throw new Error(`HTTP error! status: ${response.status}`)
+                        }
+
+                        const data = await response.json()
+                        this.files = (data.files || []).map(file => ({
+                            id: Date.now() + Math.random(),
+                            name: file.name,
+                            type: file.type,
+                            menuOpen: false,
+                            resizeOpen: false,
+                            resizeWidth: '',
+                            resizeHeight: '',
+                            uploaded: true
+                        }))
+                        
+                    } catch (error) {
+                        console.error('Error loading files:', error)
+                    }
                 },
                 toggleFileMenu(fileId) {
                     this.files.forEach(file => {
@@ -602,12 +683,35 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     }
                     file.menuOpen = false
                 },
-                deleteFile(fileId) {
-                    if (confirm('Are you sure you want to delete this file?')) {
+                async deleteFile(fileId) {
+                    const file = this.files.find(f => f.id === fileId)
+                    if (!file || !confirm('Are you sure you want to delete this file?')) return
+
+                    try {
+                        const response = await fetch('/admin/upload-delete', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                fullSlug: defaultLoadedData.fullSlug || '',
+                                filename: file.name
+                            })
+                        })
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`)
+                        }
+
+                        // Remove from UI
                         const index = this.files.findIndex(f => f.id === fileId)
                         if (index > -1) {
                             this.files.splice(index, 1)
                         }
+
+                    } catch (error) {
+                        console.error('Error deleting file:', error)
+                        alert('Error deleting file: ' + error.message)
                     }
                 },
                 toggleImageResize(fileId) {
@@ -620,7 +724,8 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 applyImageResize(file) {
                     const width = file.resizeWidth
                     const height = file.resizeHeight
-                    let markdown = `![${file.name}](${file.name}`
+                    const filePath = `/uploads/${defaultLoadedData.fullSlug || ''}/${file.name}`
+                    let markdown = `![${file.name}](${filePath}`
                     if (width || height) {
                         markdown += ` =${width || ''}x${height || ''}`
                     }
@@ -630,7 +735,8 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 insertFileLink(file) {
                     const isImage = file.type === 'image'
-                    const link = isImage ? `![${file.name}](${file.name})` : `[${file.name}](${file.name})`
+                    const filePath = `/uploads/${defaultLoadedData.fullSlug || ''}/${file.name}`
+                    const link = isImage ? `![${file.name}](${filePath})` : `[${file.name}](${filePath})`
                     this.insertAtCursor(link)
                 },
                 insertPageLink(page) {
@@ -773,6 +879,11 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     // Auto-load history if section is open on page load
                     if (this.sections.history && this.history.length === 0) {
                         this.loadHistory();
+                    }
+                    
+                    // Auto-load files if section is open on page load
+                    if (this.sections.fileupload && this.files.length === 0) {
+                        this.loadFiles();
                     }
                 })
             },

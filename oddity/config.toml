@@ -1,6 +1,7 @@
 [content]
 content_dir = 'content/content'
 static_dirs = ['content/static']
+upload_dir = 'content/static'
 addr = ':8081'
 default_new_hint = 'blog'
 sidecar_db = 'content/sqlite.db'

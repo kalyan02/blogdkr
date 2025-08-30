@@ -65,6 +65,15 @@ func StartServer(cfg config.Config) {
 	r := gin.Default()
 	r.LoadHTMLGlob("tmpl/*")
 
+	// serve static files from uploadsdir at /uploads
+	uploadsDir := cfg.Content.UploadDir
+	if uploadsDir != "" {
+		r.Static("/uploads", uploadsDir)
+		logrus.Infof("Serving static files from %s at /uploads", uploadsDir)
+	} else {
+		logrus.Warn("UploadsDir is not set in config, static files will not be served")
+	}
+
 	siteApp := &sitesrv.SiteApp{
 		Config:         cfg,
 		SiteContent:    siteContent,
@@ -85,10 +94,7 @@ func StartServer(cfg config.Config) {
 	// auth middleware
 	r.Use(authzApp.AuthMiddleware())
 
-	adminGroup := r.Group("/admin")
-	adminGroup.Use(authzApp.RequireAuth())
-	adminGroup.GET("/edit", adminApp.HandleAdminEditor)
-	adminGroup.Any("/edit-data", adminApp.HandleEditPageData)
+	adminApp.RegisterRoutes(r)
 
 	siteApp.RegisterRoutes(r)
 	authzApp.RegisterRoutes(r)
