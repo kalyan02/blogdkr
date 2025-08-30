@@ -42,6 +42,7 @@ func (a *AuthzApp) RegisterRoutes(r *gin.Engine) {
 	{
 		authGroup.GET("", a.HandleAuthPage)
 		authGroup.POST("/login", a.HandleLogin)
+		authGroup.GET("/logout", a.HandleLogoutGET)
 		authGroup.POST("/logout", a.HandleLogout)
 		authGroup.POST("/change-password", a.HandleChangePassword)
 	}
@@ -279,13 +280,23 @@ func (a *AuthzApp) HandleLogin(c *gin.Context) {
 
 // HandleLogout handles logout requests
 func (a *AuthzApp) HandleLogout(c *gin.Context) {
+	a.doLogout(c)
+	c.JSON(http.StatusOK, gin.H{"success": true, "redirect": "/"})
+}
+
+func (a *AuthzApp) doLogout(c *gin.Context) {
 	sessionToken, err := c.Cookie("session_token")
 	if err == nil && sessionToken != "" {
 		a.DeleteSession(sessionToken)
 	}
 
 	c.SetCookie("session_token", "", -1, "/", "", false, true)
-	c.JSON(http.StatusOK, gin.H{"success": true, "redirect": "/"})
+}
+
+// HandleLogoutGET handles logout requests via GET (for convenience)
+func (a *AuthzApp) HandleLogoutGET(c *gin.Context) {
+	a.doLogout(c)
+	c.Redirect(http.StatusSeeOther, "/")
 }
 
 // HandleChangePassword handles password change requests
