@@ -475,7 +475,13 @@ func (w *Wire) formatResults(files []FileDetail, format FormatType) ([]string, e
 	for _, file := range files {
 		page := NewPageFromFileDetail(&file)
 		title := page.Title()
+		if title == "" {
+			title = w.getTitleFromFile(file)
+		}
 		slug := page.Slug()
+		if title == "" {
+			title = filepath.Base(slug)
+		}
 
 		slug = "/" + strings.TrimPrefix(slug, "/")
 		date := page.DateCreated().Format("2006-01-02")

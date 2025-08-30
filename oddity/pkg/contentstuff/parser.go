@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/goccy/go-yaml"
 	"github.com/gomarkdown/markdown"
 	"github.com/gomarkdown/markdown/ast"
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
-	"gopkg.in/yaml.v3"
 )
 
 // FrontmatterType represents the type of frontmatter delimiter used

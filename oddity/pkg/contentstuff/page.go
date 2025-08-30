@@ -37,10 +37,10 @@ func (p *Page) Title() string {
 	}
 
 	// use filename (without dir and extension) as title if no h1 or frontmatter title
-	if firstL1 == "" {
-		base := filepath.Base(p.File.FileName)
-		firstL1 = strings.TrimSuffix(base, filepath.Ext(base))
-	}
+	//if firstL1 == "" {
+	//	base := filepath.Base(p.File.FileName)
+	//	firstL1 = strings.TrimSuffix(base, filepath.Ext(base))
+	//}
 
 	return firstL1
 }
@@ -59,7 +59,12 @@ func (p *Page) Body(noTitle bool) []byte {
 }
 
 func (p *Page) BodyWithTitle() []byte {
-	body := []byte(`# ` + p.Title() + "\n")
+
+	body := []byte("")
+	if title := p.Title(); title != "" {
+		body = append(body, []byte(`# `+title+"\n")...)
+	}
+
 	body = append(body, p.Body(false)...)
 	return body
 }

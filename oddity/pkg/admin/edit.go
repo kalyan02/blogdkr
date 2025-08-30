@@ -84,11 +84,6 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 		editedFile.Frontmatter = fm
 		file.ParsedContent = editedFile
 
-		if editedFile.Title == "" {
-			c.JSON(400, gin.H{"error": "content must have a title"})
-			return
-		}
-
 		// if new file, generate filename from slug
 		if file.FileName == "" {
 			slugParts := SplitPath(reqData.FullSlug)
@@ -368,6 +363,7 @@ func (s *AdminApp) HandleAdminEditor(c *gin.Context) {
 	//}
 
 	path := c.Query("path")
+	path = strings.Trim(path, "/")
 	if path == "" {
 		c.String(400, "path query param is required")
 		return

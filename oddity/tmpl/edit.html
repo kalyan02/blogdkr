@@ -215,9 +215,11 @@
                     </h3>
                     <div v-show="sections.frontmatter">
                         <textarea v-model="frontmatter"
+                                  @input="updateFrontmatter"
                                   class="w-full h-24 text-xs border border-gray-200 p-2 font-mono resize-y outline-none bg-gray-50 focus:border-blue-500 rounded"
                                   placeholder="title: My Post&#10;tags: [blog, markdown]&#10;date: 2024-01-01&#10;public: true">
                         </textarea>
+                        <div v-if="frontmatter === ''" class="text-xs text-gray-400 mt-1">Frontmatter is empty</div>
                     </div>
                 </div>
 
@@ -522,15 +524,16 @@ Start writing your content here. The editor is now centered with a fixed maximum
                             })
                         });
 
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
+                        const data = await response.json();
+
+                        if (!response.ok || data.error) {
+                            const errorMessage = data.error || `HTTP error! status: ${response.status}`;
+                            throw new Error(errorMessage);
                         }
 
-                        const updatedData = await response.json();
-                        
-                        this.content = updatedData.content || this.content;
-                        this.frontmatter = updatedData.frontmatter || this.frontmatter;
-                        this.currentFile = updatedData.currentFile || this.currentFile;
+                        this.content = data.content || this.content;
+                        this.frontmatter = data.frontmatter || this.frontmatter;
+                        this.currentFile = data.currentFile || this.currentFile;
                         this.lastSaved = new Date().toLocaleTimeString();
                         
                         console.log('Content saved successfully!');
@@ -647,6 +650,10 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 performSearch() {
                     console.log('Searching for:', this.searchQuery)
+                },
+                updateFrontmatter(event) {
+                    console.log('Frontmatter updated:', JSON.stringify(event.target.value))
+                    this.frontmatter = event.target.value
                 },
                 async loadHistory() {
                     if (!defaultLoadedData.fullSlug) {
