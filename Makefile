@@ -18,9 +18,9 @@ help: ## Show this help message
 # Setup targets
 .PHONY: setup
 setup: ## Initial setup - create directories
-	@mkdir -p caddy/data caddy/config caddy/logs
-	@chown -R $(USER):$(USER) caddy/
-	@echo "Created Caddy directories"
+	@mkdir -p caddy/data caddy/config caddy/logs public_html blogcontent
+	@chown -R $(USER):$(USER) caddy/ public_html/ blogcontent/
+	@echo "Created data directories"
 	@echo ""
 	@echo "🎉 Setup complete! Next steps:"
 	@echo "1. Edit $(ODDITY_DIR)/config.toml with your blog configuration"
@@ -32,15 +32,11 @@ setup: ## Initial setup - create directories
 # Docker services management
 .PHONY: up
 up: ## Start all Docker services (PHP + Caddy)
-	@mkdir -p caddy/data caddy/config caddy/logs public_html
-	@chown -R $(USER):$(USER) caddy/ public_html/
 	sudo docker-compose up -d
 
 .PHONY: dev
 dev: ## Start development environment
 	@echo "Starting development environment..."
-	@mkdir -p dev/data dev/config dev/logs
-	@chown -R $(USER):$(USER) dev/
 	@sudo docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 .PHONY: down
@@ -134,6 +130,9 @@ oddity-setup-full: ## full setup of oddity (config + db + dirs) inside container
 	docker-compose run --rm --entrypoint "" oddity oddity setup tmpl
 	docker-compose run --rm --entrypoint "" oddity oddity setup auth
 
+.PHONY: oddity-tmpl
+oddity-tmpl: ## just setup tmpls
+	docker-compose run --rm --entrypoint "" oddity oddity setup tmpl --force
 
 # Troubleshooting
 .PHONY: debug
