@@ -765,11 +765,56 @@ Start writing your content here. The editor is now centered with a fixed maximum
                         file.menuOpen = !file.menuOpen
                     }
                 },
-                renameFile(file) {
+                async renameFile(file) {
                     const newName = prompt('Enter new filename:', file.name)
-                    if (newName && newName.trim()) {
-                        file.name = newName.trim()
+                    if (!newName || !newName.trim() || newName.trim() === file.name) {
+                        file.menuOpen = false
+                        return
                     }
+
+                    const trimmedName = newName.trim()
+
+                    // Basic client-side validation
+                    if (trimmedName.includes('/') || trimmedName.includes('\\') || trimmedName.includes('..')) {
+                        alert('Invalid filename. Cannot contain /, \\, or ..')
+                        file.menuOpen = false
+                        return
+                    }
+
+                    // Check if filename already exists in current files
+                    if (this.files.some(f => f.id !== file.id && f.name === trimmedName)) {
+                        alert('A file with this name already exists')
+                        file.menuOpen = false
+                        return
+                    }
+
+                    try {
+                        const response = await fetch('/admin/upload-rename', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                fullSlug: defaultLoadedData.fullSlug || '',
+                                oldFilename: file.name,
+                                newFilename: trimmedName
+                            })
+                        })
+
+                        if (!response.ok) {
+                            const error = await response.json()
+                            throw new Error(error.error || `HTTP error! status: ${response.status}`)
+                        }
+
+                        // Update the filename in the UI only after successful server rename
+                        file.name = trimmedName
+                        console.log('File renamed successfully')
+
+                    } catch (error) {
+                        console.error('Error renaming file:', error)
+                        alert('Error renaming file: ' + error.message)
+                    }
+
                     file.menuOpen = false
                 },
                 async deleteFile(fileId) {

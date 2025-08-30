@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -44,6 +45,7 @@ func (s *AdminApp) RegisterRoutes(r *gin.Engine) {
 	adminGroup.POST("/upload", s.HandleFileUpload)
 	adminGroup.GET("/uploads-list", s.HandleUploadsList)
 	adminGroup.POST("/upload-delete", s.HandleFileDelete)
+	adminGroup.POST("/upload-rename", s.HandleFileRename)
 }
 
 type FileInfo struct {
@@ -501,4 +503,60 @@ func (e editPageData) JSONString() string {
 		return "{}"
 	}
 	return string(jsonBytes)
+}
+
+func (s *AdminApp) HandleFileRename(c *gin.Context) {
+	var req struct {
+		FullSlug    string `json:"fullSlug"`
+		OldFilename string `json:"oldFilename"`
+		NewFilename string `json:"newFilename"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "invalid JSON body"})
+		return
+	}
+
+	if req.FullSlug == "" || req.OldFilename == "" || req.NewFilename == "" {
+		c.JSON(400, gin.H{"error": "fullSlug, oldFilename, and newFilename are required"})
+		return
+	}
+
+	// Security: ensure filenames don't contain path traversal
+	if strings.Contains(req.OldFilename, "..") || strings.Contains(req.OldFilename, "/") || strings.Contains(req.OldFilename, "\\") ||
+		strings.Contains(req.NewFilename, "..") || strings.Contains(req.NewFilename, "/") || strings.Contains(req.NewFilename, "\\") {
+		c.JSON(400, gin.H{"error": "invalid filename"})
+		return
+	}
+
+	// Validate filename is not empty after trimming
+	req.NewFilename = strings.TrimSpace(req.NewFilename)
+	if req.NewFilename == "" {
+		c.JSON(400, gin.H{"error": "new filename cannot be empty"})
+		return
+	}
+
+	oldFilePath := filepath.Join(s.SiteContent.Config.UploadDir, req.FullSlug, req.OldFilename)
+	newFilePath := filepath.Join(s.SiteContent.Config.UploadDir, req.FullSlug, req.NewFilename)
+
+	// Check if old file exists
+	if _, err := os.Stat(oldFilePath); os.IsNotExist(err) {
+		c.JSON(404, gin.H{"error": "file not found"})
+		return
+	}
+
+	// Check if new filename already exists
+	if _, err := os.Stat(newFilePath); err == nil {
+		c.JSON(409, gin.H{"error": "file with new name already exists"})
+		return
+	}
+
+	// Perform the rename
+	if err := os.Rename(oldFilePath, newFilePath); err != nil {
+		c.JSON(500, gin.H{"error": fmt.Sprintf("failed to rename file: %v", err)})
+		return
+	}
+
+	log.Infof("Renamed file: %s -> %s", oldFilePath, newFilePath)
+	c.JSON(200, gin.H{"success": true, "newFilename": req.NewFilename})
 }
