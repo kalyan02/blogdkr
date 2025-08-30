@@ -191,9 +191,10 @@ func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 		Meta: contentstuff.PageMeta{
 			Title: page.Title(),
 		},
-		PageHTML:    page.SafeHTML(),
-		CreatedDate: page.DateCreated(),
-		BackLink:    s.backLinkToParent(page.Slug()),
+		PageHTML:     page.SafeHTML(),
+		CreatedDate:  page.DateCreated(),
+		ModifiedDate: page.DateModified(),
+		BackLink:     s.backLinkToParent(page.Slug()),
 	}
 	//postPage.ModifiedDate = p.DateModified()
 

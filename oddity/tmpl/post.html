@@ -84,12 +84,17 @@
                 <h1 class="text-3xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
 
                 {{if or .CreatedDate .ModifiedDate .WordCount .ReadingTime}}
+
+                {{$created := ""}}{{$modified := ""}}
+                {{if .CreatedDate}}{{$created = .CreatedDate.Format "2006-01-02"}}{{end}}
+                {{if .ModifiedDate}}{{$modified = .ModifiedDate.Format "2006-01-02"}}{{end}}
+
                 <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                     {{if .CreatedDate}}
                     <span>Created {{.CreatedDate.Format "2006-01-02"}}</span>
                     {{end}}
                     {{if .ModifiedDate}}
-                    {{if ne .CreatedDate.Format "2006-01-02" .ModifiedDate.Format "2006-01-02"}}
+                    {{if ne $created $modified}}
                     <span>•</span>
                     <span>Modified {{.ModifiedDate.Format "2006-01-02"}}</span>
                     {{end}}

@@ -75,7 +75,7 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 		reqData.FullSlug = strings.Trim(reqData.FullSlug, "/")
 
 		targetFile := reqData.CurrentFile
-		file := s.SiteContent.FileName[targetFile]
+		file, existingPage := s.SiteContent.FileName[targetFile]
 
 		parser := contentstuff.NewMarkdownParser(contentstuff.DefaultParserConfig())
 		editedFile, err := parser.Parse([]byte(reqData.Content))
@@ -101,6 +101,14 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 
 		editedFile.Frontmatter = fm
 		file.ParsedContent = editedFile
+
+		// set times
+		if !existingPage {
+			file.ParsedContent.Frontmatter.SetValue("created", time.Now().Unix())
+			file.ParsedContent.Frontmatter.SetValue("created_time", time.Now().Format("2006-01-02 15:04:05"))
+		}
+		file.ParsedContent.Frontmatter.SetValue("updated", time.Now().Unix())
+		file.ParsedContent.Frontmatter.SetValue("updated_time", time.Now().Format("2006-01-02 15:04:05"))
 
 		// if new file, generate filename from slug
 		if file.FileName == "" {

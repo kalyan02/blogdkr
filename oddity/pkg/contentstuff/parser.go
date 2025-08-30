@@ -743,6 +743,28 @@ func (fm *FrontmatterData) GetString(key string) (string, bool) {
 	return "", false
 }
 
+// SetString safely sets a string value in frontmatter data
+func (fm *FrontmatterData) SetString(key, value string) {
+	if fm == nil {
+		return
+	}
+	if fm.Data == nil {
+		fm.Data = make(map[string]interface{})
+	}
+	fm.Data[key] = value
+}
+
+// SetValue safely sets a value of any type in frontmatter data
+func (fm *FrontmatterData) SetValue(key string, value any) {
+	if fm == nil {
+		return
+	}
+	if fm.Data == nil {
+		fm.Data = make(map[string]interface{})
+	}
+	fm.Data[key] = value
+}
+
 // GetValue safely gets a value of any type from frontmatter data
 func (fm *FrontmatterData) GetValue(key string) (any, bool) {
 	if fm == nil || fm.Data == nil {
