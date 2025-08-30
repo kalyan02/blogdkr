@@ -88,7 +88,7 @@
 
         /* Fade navigation and sidebar on hover */
         .nav-fade {
-            opacity: 0.15;
+            opacity: 0.4;
             transition: opacity 0.3s ease-in-out;
         }
         
@@ -97,7 +97,7 @@
         }
         
         .sidebar-fade {
-            opacity: 0.05;
+            opacity: 0.5;
             transition: opacity 0.3s ease-in-out;
         }
         
@@ -191,8 +191,8 @@
                  }">
                 
                 <!-- Navigation Section -->
-                <div class="mb-6">
-                    <h3 @click="toggleSection('navigation')" 
+                <div class="mb-6" v-if="navigationItems.length > 0">
+                    <h3 @click="toggleSection('navigation')"
                         class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
                         Navigation
                         <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.navigation }">▼</span>
@@ -315,7 +315,7 @@
 
 
                 <!-- Page Search Section -->
-                <div class="mb-6">
+                <div class="mb-6" v-if="false">
                     <h3 @click="toggleSection('search')" 
                         class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
                         Page Search
@@ -477,7 +477,7 @@
                         // { name: 'All Posts', href: '/admin/posts', emoji: '📝' },
                         // { name: 'Pages', href: '/admin/pages', emoji: '📄' },
                         // { name: 'Files', href: '/admin/files', emoji: '🗂️' },
-                        { name: 'Preview', href: '/preview/untitled', target: '_blank', emoji: '👁️', primary: true }
+                        // { name: 'Preview', href: '/preview/untitled', target: '_blank', emoji: '👁️', primary: true }
                     ],
                     files: [],
                     pendingFiles: [],
