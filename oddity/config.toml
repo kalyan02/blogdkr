@@ -1,5 +1,5 @@
 [content]
-content_dir = 'content/content'
+content_dir = 'content/content2'
 static_dirs = ['content/static']
 upload_dir = 'content/static'
 addr = ':8081'

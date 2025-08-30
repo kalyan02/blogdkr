@@ -4,15 +4,18 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	toml "github.com/pelletier/go-toml/v2"
 
-	log "github.com/sirupsen/logrus"
+	"oddity/pkg/utils"
 )
 
 type Config struct {
 	Content ContentConfig `toml:"content"`
 	Site    SiteConfig    `toml:"site"`
+
+	filePath string
 }
 
 func (c Config) EncodeTOML() ([]byte, error) {
@@ -32,27 +35,16 @@ func NewDefaultConfig() Config {
 	}
 }
 
-func GenerateDefault() {
-	defaultConfig := NewDefaultConfig()
-	configData, err := defaultConfig.EncodeTOML()
-	if err != nil {
-		log.Fatalf("Failed to marshal default config: %v", err)
-	}
-
-	configFilePath := "config.toml"
-	if _, err := os.Stat(configFilePath); err == nil {
-		log.Fatalf("Config file %s already exists. Aborting to prevent overwrite.", configFilePath)
-	}
-
-	err = os.WriteFile(configFilePath, configData, 0644)
-	if err != nil {
-		log.Fatalf("Failed to write config file: %v", err)
-	}
-
-	fmt.Printf("Default configuration file created at %s\n", configFilePath)
-}
-
 func LoadConfigTOML(path string) (Config, error) {
+	// if path is not absolute, get absolute path
+	if !filepath.IsAbs(path) {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return Config{}, fmt.Errorf("failed to get absolute path of config file: %w", err)
+		}
+		path = absPath
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("failed to read config file: %w", err)
@@ -61,7 +53,17 @@ func LoadConfigTOML(path string) (Config, error) {
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("failed to unmarshal config file: %w", err)
 	}
+
+	cfg.filePath = path
+
 	return cfg, nil
+}
+
+// ResolveDir resolves a directory path relative to the config file location if it's not absolute.
+func (c Config) ResolveDir(path string) (string, error) {
+	confPath := c.filePath
+
+	return utils.ResolveRelative(path, confPath)
 }
 
 type ContentConfig struct {
@@ -76,10 +78,11 @@ type ContentConfig struct {
 }
 
 var DefaultConfig = ContentConfig{
-	ContentDir:     "content/content",
-	StaticDirs:     []string{"content/static"},
-	UploadDir:      "content/uploads",
-	SidecarDB:      "content/sqlite.db",
+	ContentDir:     "content",
+	StaticDirs:     []string{"static"},
+	UploadDir:      "uploads",
+	SidecarDB:      "sqlite.db",
+	ThemeDir:       "tmpl",
 	DefaultNewHint: "blog",
 	Addr:           ":8081",
 	AdminAddr:      ":8082",

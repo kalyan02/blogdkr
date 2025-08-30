@@ -2,6 +2,7 @@ package run
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -63,7 +64,11 @@ func StartServer(cfg config.Config) {
 	}
 
 	r := gin.Default()
-	r.LoadHTMLGlob("tmpl/*")
+	tmplDir := cfg.Content.ThemeDir
+	if tmplDir == "" {
+		tmplDir = "tmpl"
+	}
+	r.LoadHTMLGlob(filepath.Join(tmplDir, "*.html"))
 
 	// serve static files from uploadsdir at /uploads
 	uploadsDir := cfg.Content.UploadDir

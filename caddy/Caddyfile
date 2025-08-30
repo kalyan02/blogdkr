@@ -23,40 +23,20 @@
 	# Everything else
 	handle {
 		# 1) /var/www/sync when file exists (never serve .php)
-		@sync_exists {
-			file {
-				root /var/www/sync
-				try_files {path} {path}/index.html
-			}
-		}
-		handle @sync_exists {
-			root * /var/www/sync
-			file_server {
-				hide *.php
-			}
-		}
-
-		root * /var/www/html
-
-		# @in_test path /test/*
-		# handle @in_test {
-		#     # Match files that exist under /var/www/html/test/
-		#     @exists file {
-		#         try_files {path}
-		#     }
-		#     handle @exists {
-		#         # Serve existing static files (hide .php)
-		#         file_server {
-		#             hide *.php
-		#         }
-		#         # If it's a real .php file, execute it
-		#         php_fastcgi localhost:9000
-		#     }
-		#     # If file doesn't exist, rewrite to /test/index.php
-		#     rewrite * /test/index.php
-		#     php_fastcgi localhost:9000
+		# @sync_exists {
+		# 	file {
+		# 		root /var/www/html
+		# 		try_files {path} {path}/index.html
+		# 	}
+		# }
+		# handle @sync_exists {
+		# 	root * /var/www/html
+		# 	file_server {
+		# 		hide *.php
+		# 	}
 		# }
 
+		root * /var/www/html
 
 		# Handles .php and directories with index.php
 		php_fastcgi localhost:9000 {
@@ -66,6 +46,12 @@
 		# Serve static files, hide .php from being served as plain files
 		file_server {
 			hide *.php
+		}
+
+		# proxy anything else to the API server
+		# reverse_proxy localhost:3000
+		handler {
+			reverse_proxy localhost:3000
 		}
 
 		# 5) nothing matched

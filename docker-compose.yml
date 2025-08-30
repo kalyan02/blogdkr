@@ -19,6 +19,21 @@ services:
       retries: 3
       start_period: 10s
 
+  oddity:
+    build:
+      context: .
+      dockerfile: oddity/Dockerfile
+    restart: unless-stopped
+    # env_file:
+    #   - .env.dev
+    environment:
+      TZ: UTC
+      BACKUP_SCHEDULE: "0 2 * * *"  # Daily at 2 AM
+    volumes:
+      - ./blogcontent:/var/www/content
+    working_dir: /var/www/content
+    command: ["run"]
+
   # Caddy reverse proxy with PHP support
   caddy:
     image: caddy:2-alpine
@@ -29,7 +44,6 @@ services:
       - ./caddy/config:/config
       - ./caddy/logs:/var/log/caddy
       - ./public_html:/var/www/html
-      - ./blogsync2/sync:/var/www/sync:ro
     restart: unless-stopped
     network_mode: host
 

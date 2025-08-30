@@ -1,20 +1,12 @@
 package cmd
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"strings"
-	"syscall"
-
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
 
-	"oddity/pkg/authz"
-	"oddity/pkg/config"
-	"oddity/pkg/contentstuff"
+	"oddity/pkg/cmdutil"
 )
+
+var setupForce bool
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
@@ -26,7 +18,7 @@ var adminAuthCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Set up admin username and password",
 	Long:  `Interactive command to set up or update admin username and password.`,
-	Run:   runAdminAuthSetup,
+	Run:   func(cmd *cobra.Command, args []string) { cmdutil.RunAdminAuthSetup(configPath) },
 }
 
 var newConfigCmd = &cobra.Command{
@@ -34,7 +26,16 @@ var newConfigCmd = &cobra.Command{
 	Short: "Generate default configuration file",
 	Long:  `Generates a default configuration file named config.yaml in the current directory.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		config.GenerateDefault()
+		cmdutil.GenerateDefault(configPath, setupForce)
+	},
+}
+
+var newTmplCmd = &cobra.Command{
+	Use:   "tmpl",
+	Short: "Generate default template files",
+	Long:  `Generates default HTML template files in the specified directory.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		cmdutil.GenerateDefaultTemplates(configPath, setupForce)
 	},
 }
 
@@ -42,89 +43,9 @@ func init() {
 	rootCmd.AddCommand(setupCmd)
 	setupCmd.AddCommand(adminAuthCmd)
 	setupCmd.AddCommand(newConfigCmd)
-}
-
-func runAdminAuthSetup(cmd *cobra.Command, args []string) {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Print("Enter admin username: ")
-	username, err := reader.ReadString('\n')
-	if err != nil {
-		log.Fatalf("Error reading username: %v", err)
-	}
-	username = strings.TrimSpace(username)
-
-	if username == "" {
-		log.Fatal("Username cannot be empty")
-	}
-
-	fmt.Print("Enter admin password: ")
-	passwordBytes, err := terminal.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		log.Fatalf("Error reading password: %v", err)
-	}
-	password := string(passwordBytes)
-	fmt.Println()
-
-	if len(password) < 4 {
-		log.Fatal("Password must be at least 4 characters long")
-	}
-
-	fmt.Print("Confirm admin password: ")
-	confirmPasswordBytes, err := terminal.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		log.Fatalf("Error reading password confirmation: %v", err)
-	}
-	confirmPassword := string(confirmPasswordBytes)
-	fmt.Println()
-
-	if password != confirmPassword {
-		log.Fatal("Passwords do not match")
-	}
-
-	// Initialize content system for database access
-	siteContent := contentstuff.NewContentStuff(config.DefaultConfig)
-	err = siteContent.LoadContent()
-	if err != nil {
-		log.Fatalf("Failed to load content system: %v", err)
-	}
-
-	authzApp := &authz.AuthzApp{
-		SiteContent: siteContent,
-	}
-
-	// Initialize database (migrate tables)
-	authzApp.Init()
-
-	// Check if user already exists
-	var existingUser authz.User
-	err = siteContent.DBHandle.Where("username = ?", username).First(&existingUser).Error
-
-	if err == nil {
-		// User exists, update password
-		err = authzApp.ChangePassword(existingUser.ID, password)
-		if err != nil {
-			log.Fatalf("Failed to update password: %v", err)
-		}
-		fmt.Printf("Successfully updated password for admin user '%s'\n", username)
-	} else {
-		// User doesn't exist, create new admin
-		hash, err := authzApp.HashPassword(password)
-		if err != nil {
-			log.Fatalf("Failed to hash password: %v", err)
-		}
-
-		user := authz.User{
-			Username:     username,
-			Email:        fmt.Sprintf("%s@localhost", username),
-			PasswordHash: hash,
-			Role:         "admin",
-		}
-
-		err = siteContent.DBHandle.Create(&user).Error
-		if err != nil {
-			log.Fatalf("Failed to create admin user: %v", err)
-		}
-		fmt.Printf("Successfully created admin user '%s'\n", username)
-	}
+	setupCmd.AddCommand(newTmplCmd)
+	// runCmd.Flags().StringVar(&configPath, "config", "", "Path to TOML config file")
+	setupCmd.PersistentFlags().StringVar(&configPath, "config", "config.toml", "Path to TOML config file")
+	// force
+	setupCmd.PersistentFlags().BoolVar(&setupForce, "force", false, "Force overwrite of existing files")
 }

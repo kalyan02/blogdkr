@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -214,11 +213,11 @@ func (c *ContentStuff) scanContentPath(path string, info fs.FileInfo, err error)
 		}
 	}
 
-	var ctime time.Time
-	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-		// convert to time.Time
-		ctime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
-	}
+	//var ctime time.Time
+	//if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+	//	// convert to time.Time
+	//	ctime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
+	//}
 
 	if info.IsDir() {
 		c.FileName[relPath] = FileDetail{
@@ -226,7 +225,7 @@ func (c *ContentStuff) scanContentPath(path string, info fs.FileInfo, err error)
 			FileType:   FileTypeDirectory,
 			LoadedAt:   time.Now(),
 			ModifiedAt: info.ModTime(),
-			CreatedAt:  ctime,
+			CreatedAt:  info.ModTime(),
 		}
 	}
 
@@ -262,7 +261,7 @@ func (c *ContentStuff) scanContentPath(path string, info fs.FileInfo, err error)
 					return FileTypeHTML
 				}
 			}(),
-			CreatedAt: ctime,
+			CreatedAt: info.ModTime(),
 		}
 		c.FileName[relPath] = fd
 

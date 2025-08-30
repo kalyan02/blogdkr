@@ -4,7 +4,7 @@
 # Variables
 COMPOSE_FILE := docker-compose.yml
 SERVICE_CADDY := caddy
-BLOGSYNC_DIR := blogsync
+ODDITY_DIR := oddity
 
 # Environment configuration (debug by default)
 ENV ?= debug
@@ -22,7 +22,7 @@ setup: ## Initial setup - create directories
 	@echo "Created Caddy directories"
 	@echo ""
 	@echo "🎉 Setup complete! Next steps:"
-	@echo "1. Edit $(BLOGSYNC_DIR)/config.toml with your Dropbox app credentials"
+	@echo "1. Edit $(ODDITY_DIR)/config.toml with your blog configuration"
 	@echo "2. Run 'make start' to start both Caddy and BlogSync"
 	@echo "3. Get auth URL: curl http://localhost:3001/admin/auth"
 	@echo "4. Open the returned URL in browser to authenticate with Dropbox"
@@ -77,35 +77,9 @@ caddy-logs: ## Show Caddy logs
 caddy-shell: ## Open shell in Caddy container
 	sudo docker-compose exec $(SERVICE_CADDY) /bin/sh
 
-# BlogSync management (Native)
-.PHONY: blogsync-build
-blogsync-build: ## Build BlogSync binary
-	cd $(BLOGSYNC_DIR) && ENV=$(ENV) make build
-
-
-.PHONY: blogsync-start
-blogsync-start: ## Start BlogSync service
-	cd $(BLOGSYNC_DIR) && ENV=$(ENV) make start
-
-.PHONY: blogsync-start-bg
-blogsync-start-bg: ## Start BlogSync in background
-	cd $(BLOGSYNC_DIR) && ENV=$(ENV) make start-bg
-
-.PHONY: blogsync-stop
-blogsync-stop: ## Stop BlogSync service
-	cd $(BLOGSYNC_DIR) && make stop
-
-.PHONY: blogsync-status
-blogsync-status: ## Check BlogSync status
-	cd $(BLOGSYNC_DIR) && make status
-
-.PHONY: blogsync-logs
-blogsync-logs: ## Show BlogSync logs
-	cd $(BLOGSYNC_DIR) && make logs
-
 # Combined operations
 .PHONY: start
-start: caddy-up blogsync-start-bg ## Start both Caddy and BlogSync
+start: caddy-up  ## Start both Caddy and BlogSync
 	@echo ""
 	@echo "✅ Services started:"
 	@echo "  - Caddy reverse proxy: http://localhost (port 80)"
@@ -114,7 +88,7 @@ start: caddy-up blogsync-start-bg ## Start both Caddy and BlogSync
 	@echo "Check status with: make status"
 
 .PHONY: stop
-stop: blogsync-stop caddy-down ## Stop both services
+stop: oddity-stop caddy-down ## Stop both services
 	@echo "✅ All services stopped"
 
 .PHONY: restart
@@ -126,7 +100,7 @@ status: ## Check status of all services
 	@sudo docker-compose ps
 	@echo ""
 	@echo "=== BlogSync Status ==="
-	@cd $(BLOGSYNC_DIR) && make status || echo "BlogSync not running"
+	@cd $(ODDITY_DIR) && make status || echo "BlogSync not running"
 	@echo ""
 	@echo "=== Service Health ==="
 	@curl -s -o /dev/null -w "Port 80 (Caddy): %{http_code}\n" http://localhost/health 2>/dev/null || echo "Port 80 (Caddy): FAILED"
@@ -137,62 +111,8 @@ logs: ## Show logs for both services
 	@echo "Starting log tail for both services..."
 	@echo "Press Ctrl+C to stop"
 	@(sudo docker-compose logs -f $(SERVICE_CADDY) &)
-	@cd $(BLOGSYNC_DIR) && make logs
+	@cd $(ODDITY_DIR) && make logs
 
-# Development targets
-.PHONY: dev-build
-dev-build: ## Build BlogSync in debug mode
-	cd $(BLOGSYNC_DIR) && ENV=$(ENV) make build
-
-.PHONY: dev-start
-dev-start: caddy-up ## Start with BlogSync in development mode
-	@echo "Starting Caddy..."
-	@echo "Starting BlogSync in development mode..."
-	cd $(BLOGSYNC_DIR) && ENV=$(ENV) make dev-start
-
-# Configuration
-.PHONY: config-edit
-config-edit: ## Edit BlogSync configuration
-	@${EDITOR:-nano} $(BLOGSYNC_DIR)/config.toml
-
-.PHONY: config-check
-config-check: ## Check configurations
-	@echo "=== Docker Compose Config ==="
-	sudo docker-compose config
-	@echo ""
-	@echo "=== BlogSync Config ==="
-	@cd $(BLOGSYNC_DIR) && make check-config
-
-
-# Maintenance
-.PHONY: clean
-clean: stop ## Clean up everything
-	sudo docker-compose down --remove-orphans
-	cd $(BLOGSYNC_DIR) && make clean
-	sudo docker system prune -f
-
-.PHONY: backup
-backup: ## Backup configuration and data
-	@mkdir -p backups/$(shell date +%Y%m%d_%H%M%S)
-	@cp -r $(BLOGSYNC_DIR)/config.toml backups/$(shell date +%Y%m%d_%H%M%S)/ 2>/dev/null || true
-	@cp -r $(HOME)/.dropbox_sync backups/$(shell date +%Y%m%d_%H%M%S)/ 2>/dev/null || true
-	@cp -r caddy backups/$(shell date +%Y%m%d_%H%M%S)/ 2>/dev/null || true
-	@echo "Backup completed in backups/$(shell date +%Y%m%d_%H%M%S)"
-
-# Update and maintenance
-.PHONY: update
-update: ## Update dependencies
-	cd $(BLOGSYNC_DIR) && make update
-	sudo docker-compose pull
-
-.PHONY: health
-health: status ## Alias for status
-
-# Production deployment
-.PHONY: deploy
-deploy: blogsync-build start ## Deploy to production
-	@echo "🚀 Deployment complete!"
-	@echo "Application available at: http://localhost"
 
 # Troubleshooting
 .PHONY: debug
@@ -209,4 +129,4 @@ debug: ## Show debug information
 	@ls -la
 	@echo ""
 	@echo "=== BlogSync Directory ==="
-	@ls -la $(BLOGSYNC_DIR)/
+	@ls -la $(ODDITY_DIR)/
