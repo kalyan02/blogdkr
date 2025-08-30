@@ -91,8 +91,10 @@ type SiteConfig struct {
 }
 
 type NavigationLink struct {
-	Name string `json:"name" toml:"name"`
-	URL  string `json:"url" toml:"url"`
+	Name       string `json:"name" toml:"name"`
+	URL        string `json:"url" toml:"url"`
+	IsExternal bool   `json:"is_external,omitempty" toml:"is_external,omitempty"`
+	IsActive   bool   `json:"is_active,omitempty" toml:"is_active,omitempty"`
 }
 
 var DefaultSiteConfig = SiteConfig{

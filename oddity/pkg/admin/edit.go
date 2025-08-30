@@ -13,7 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
+	"oddity/pkg/authz"
 	"oddity/pkg/contentstuff"
 )
 
@@ -30,6 +33,7 @@ type editPageData struct {
 type AdminApp struct {
 	WireController *contentstuff.Wire
 	SiteContent    *contentstuff.ContentStuff
+	Authz          *authz.AuthzApp
 }
 
 func (s *AdminApp) HandleEditPageData(c *gin.Context) {
@@ -312,7 +316,8 @@ func (s *AdminApp) buildEditPageDataResponse(path string) (editPageData, error) 
 			BreadCrumbs:     buildBreadCrumbLinks(path),
 			NewPostHintSlug: s.createNewPostSlugHint(nil),
 			Frontmatter:     defaultFMRaw,
-			Content:         fmt.Sprintf("# %s\n\nwrite...", filepath.Base(path)),
+			Content:         fmt.Sprintf("# %s\n\nwrite...", buildMaybeTitle(path)),
+			CurrentFile:     fmt.Sprintf("%s.md", strings.Trim(path, "/")),
 		}
 
 		if strings.HasSuffix(path, "index") || strings.HasSuffix(path, "index.md") {
@@ -350,9 +355,30 @@ func (s *AdminApp) buildEditPageDataResponse(path string) (editPageData, error) 
 }
 
 func (s *AdminApp) HandleAdminEditor(c *gin.Context) {
+	//if newPath := c.Query("new"); newPath != "" {
+	//	// we have path that needs slugified
+	//	if slugifyWithSlash(newPath) != newPath {
+	//		//maybeTitle := buildMaybeTitle(newPath)
+	//		//_ = s.Authz.SetSessionData(c, "original_path", newPath)
+	//		//_ = s.Authz.SetSessionData(c, "maybe_title", maybeTitle)
+	//
+	//		c.Redirect(302, "/admin/edit?path="+slugifyWithSlash(newPath))
+	//		return
+	//	}
+	//}
+
 	path := c.Query("path")
 	if path == "" {
 		c.String(400, "path query param is required")
+		return
+	}
+
+	if slugifyWithSlash(path) != path {
+		//maybeTitle := buildMaybeTitle(newPath)
+		//_ = s.Authz.SetSessionData(c, "original_path", newPath)
+		//_ = s.Authz.SetSessionData(c, "maybe_title", maybeTitle)
+
+		c.Redirect(302, "/admin/edit?path="+slugifyWithSlash(path))
 		return
 	}
 
@@ -364,6 +390,22 @@ func (s *AdminApp) HandleAdminEditor(c *gin.Context) {
 	c.HTML(200, "edit.html", gin.H{
 		"Data": data.JSONString(),
 	})
+}
+
+func buildMaybeTitle(newPath string) string {
+	maybeTitle := filepath.Base(newPath)
+
+	// if it starts with date, then remove dashes after date
+	re := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-(.*)`)
+	matches := re.FindStringSubmatch(maybeTitle)
+	if len(matches) == 3 {
+		maybeTitle = fmt.Sprintf("%s %s", matches[1], strings.ReplaceAll(matches[2], "-", " "))
+	}
+
+	// capitalize first letter of each word
+	caser := cases.Title(language.English, cases.NoLower)
+	maybeTitle = caser.String(maybeTitle)
+	return maybeTitle
 }
 
 func (s *AdminApp) createNewPostSlugHint(path *contentstuff.Page) string {
@@ -400,6 +442,20 @@ func slugify(s string) string {
 	s = strings.ReplaceAll(s, " ", "-")
 	// remove all non-alphanumeric and non-hyphen characters
 	s = regexp.MustCompile(`[^a-z0-9\-]`).ReplaceAllString(s, "")
+	// replace multiple hyphens with a single hyphen
+	s = regexp.MustCompile(`-+`).ReplaceAllString(s, "-")
+	// trim leading and trailing hyphens
+	s = strings.Trim(s, "-")
+	return s
+}
+
+func slugifyWithSlash(s string) string {
+	// convert to lowercase
+	s = strings.ToLower(s)
+	// replace spaces with hyphens
+	s = strings.ReplaceAll(s, " ", "-")
+	// remove all non-alphanumeric and non-hyphen characters
+	s = regexp.MustCompile(`[^a-z0-9\-/]`).ReplaceAllString(s, "")
 	// replace multiple hyphens with a single hyphen
 	s = regexp.MustCompile(`-+`).ReplaceAllString(s, "-")
 	// trim leading and trailing hyphens

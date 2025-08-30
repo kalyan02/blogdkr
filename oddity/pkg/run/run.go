@@ -71,16 +71,16 @@ func StartServer(cfg config.Config) {
 		WireController: wireController,
 	}
 
+	authzApp := &authz.AuthzApp{
+		SiteContent: siteContent,
+	}
+	authzApp.Init()
+
 	adminApp := &admin.AdminApp{
 		SiteContent:    siteContent,
 		WireController: wireController,
+		Authz:          authzApp,
 	}
-
-	authzApp := &authz.AuthzApp{
-		SiteContent:    siteContent,
-		WireController: wireController,
-	}
-	authzApp.Init()
 
 	// auth middleware
 	r.Use(authzApp.AuthMiddleware())

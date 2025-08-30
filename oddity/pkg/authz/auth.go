@@ -3,6 +3,7 @@ package authz
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -24,16 +25,16 @@ type User struct {
 }
 
 type UserSession struct {
-	ID        uint      `gorm:"primaryKey"`
-	UserID    uint      `gorm:"index"`
-	Token     string    `gorm:"uniqueIndex"`
-	ExpiresAt time.Time `gorm:"index"`
-	User      User      `gorm:"foreignKey:UserID"`
+	ID         uint      `gorm:"primaryKey"`
+	UserID     uint      `gorm:"index"`
+	Token      string    `gorm:"uniqueIndex"`
+	ExpiresAt  time.Time `gorm:"index"`
+	User       User      `gorm:"foreignKey:UserID"`
+	CustomData string    `gorm:"type:text"` // JSON string for session data
 }
 
 type AuthzApp struct {
-	SiteContent    *contentstuff.ContentStuff
-	WireController *contentstuff.Wire
+	SiteContent *contentstuff.ContentStuff
 }
 
 func (a *AuthzApp) RegisterRoutes(r *gin.Engine) {
@@ -329,4 +330,116 @@ func (a *AuthzApp) HandleChangePassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Password changed successfully"})
+}
+
+// Session Storage Methods
+
+// SetSessionData stores custom data in the session
+func (a *AuthzApp) SetSessionData(c *gin.Context, key string, value interface{}) error {
+	sessionToken, err := c.Cookie("session_token")
+	if err != nil {
+		return err
+	}
+
+	session, err := a.GetSessionByToken(sessionToken)
+	if err != nil {
+		return err
+	}
+
+	var data map[string]interface{}
+	if session.CustomData != "" {
+		err = json.Unmarshal([]byte(session.CustomData), &data)
+		if err != nil {
+			data = make(map[string]interface{})
+		}
+	} else {
+		data = make(map[string]interface{})
+	}
+
+	data[key] = value
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return a.SiteContent.DBHandle.Model(&UserSession{}).
+		Where("token = ?", sessionToken).
+		Update("custom_data", string(jsonData)).Error
+}
+
+// GetSessionData retrieves custom data from the session
+func (a *AuthzApp) GetSessionData(c *gin.Context, key string) (interface{}, bool) {
+	sessionToken, err := c.Cookie("session_token")
+	if err != nil {
+		return nil, false
+	}
+
+	session, err := a.GetSessionByToken(sessionToken)
+	if err != nil {
+		return nil, false
+	}
+
+	if session.CustomData == "" {
+		return nil, false
+	}
+
+	var data map[string]interface{}
+	err = json.Unmarshal([]byte(session.CustomData), &data)
+	if err != nil {
+		return nil, false
+	}
+
+	value, exists := data[key]
+	return value, exists
+}
+
+// DeleteSessionData removes a key from session custom data
+func (a *AuthzApp) DeleteSessionData(c *gin.Context, key string) error {
+	sessionToken, err := c.Cookie("session_token")
+	if err != nil {
+		return err
+	}
+
+	session, err := a.GetSessionByToken(sessionToken)
+	if err != nil {
+		return err
+	}
+
+	if session.CustomData == "" {
+		return nil // nothing to delete
+	}
+
+	var data map[string]interface{}
+	err = json.Unmarshal([]byte(session.CustomData), &data)
+	if err != nil {
+		return err
+	}
+
+	delete(data, key)
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return a.SiteContent.DBHandle.Model(&UserSession{}).
+		Where("token = ?", sessionToken).
+		Update("custom_data", string(jsonData)).Error
+}
+
+// SetFlash Flash message helpers
+func (a *AuthzApp) SetFlash(c *gin.Context, message string) error {
+	return a.SetSessionData(c, "flash_message", message)
+}
+
+func (a *AuthzApp) GetFlash(c *gin.Context) string {
+	if value, exists := a.GetSessionData(c, "flash_message"); exists {
+		// Auto-delete flash message after reading
+		a.DeleteSessionData(c, "flash_message")
+		if msg, ok := value.(string); ok {
+			return msg
+		}
+	}
+	return ""
 }
