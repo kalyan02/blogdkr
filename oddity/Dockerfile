@@ -25,16 +25,19 @@ FROM alpine:3.18
 RUN apk add --no-cache \
     ca-certificates \
     curl \
-    tzdata && \
+    tzdata \
+    sqlite && \
     rm -rf /var/cache/apk/*
 
 # Create non-root user
-RUN addgroup -g 1001 -S backup && \
-    adduser -S -D -H -u 1001 -h /var/backups -s /sbin/nologin -G backup -g backup backup
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN addgroup -g ${USER_GID} -S oddity && \
+    adduser -S -D -H -u ${USER_UID} -h /var/oddity -s /sbin/nologin -G oddity -g oddity oddity
 
 # Create directories
-RUN mkdir -p /var/backups /var/log && \
-    chown -R backup:backup /var/backups /var/log
+RUN mkdir -p /var/oddity /var/log /var/oddity/data && \
+    chown -R oddity:oddity /var/oddity /var/log
 
 # Copy binary from builder stage
 COPY --from=builder /app/oddity /usr/local/bin/oddity
@@ -47,6 +50,6 @@ RUN chmod +x /entrypoint.sh
 ENV TZ=UTC
 
 # Switch to non-root user
-USER backup
+USER oddity
 
 # ENTRYPOINT ["/entrypoint.sh"]

@@ -19,6 +19,7 @@ help: ## Show this help message
 .PHONY: setup
 setup: ## Initial setup - create directories
 	@mkdir -p caddy/data caddy/config caddy/logs
+	@chown -R $(USER):$(USER) caddy/
 	@echo "Created Caddy directories"
 	@echo ""
 	@echo "🎉 Setup complete! Next steps:"
@@ -32,12 +33,14 @@ setup: ## Initial setup - create directories
 .PHONY: up
 up: ## Start all Docker services (PHP + Caddy)
 	@mkdir -p caddy/data caddy/config caddy/logs public_html
+	@chown -R $(USER):$(USER) caddy/ public_html/
 	sudo docker-compose up -d
 
 .PHONY: dev
 dev: ## Start development environment
 	@echo "Starting development environment..."
 	@mkdir -p dev/data dev/config dev/logs
+	@chown -R $(USER):$(USER) dev/
 	@sudo docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 .PHONY: down
@@ -51,6 +54,7 @@ docker-restart: down up ## Restart all Docker services
 .PHONY: caddy-up
 caddy-up: ## Start Caddy reverse proxy (requires sudo for port 80)
 	@mkdir -p caddy/data caddy/config caddy/logs
+	@chown -R $(USER):$(USER) caddy/
 	sudo docker-compose up -d $(SERVICE_CADDY)
 
 .PHONY: caddy-down
@@ -87,7 +91,7 @@ caddy-shell: ## Open shell in Caddy container
 .PHONY: status
 status: ## Check status of all services
 	@echo "=== Caddy Status ==="
-	@sudo docker-compose ps
+	@docker-compose ps
 	@echo ""
 	@echo "=== BlogSync Status ==="
 	@cd $(ODDITY_DIR) && make status || echo "BlogSync not running"
@@ -100,7 +104,7 @@ status: ## Check status of all services
 logs: ## Show logs for both services
 	@echo "Starting log tail for both services..."
 	@echo "Press Ctrl+C to stop"
-	@(sudo docker-compose logs -f $(SERVICE_CADDY) &)
+	@(docker-compose logs -f $(SERVICE_CADDY) &)
 	@cd $(ODDITY_DIR) && make logs
 
 # oddity management

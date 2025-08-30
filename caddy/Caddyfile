@@ -36,7 +36,8 @@
 
 		# If no static file or PHP file found, proxy to oddity
 		@not_found {
-			not file
+			not file {path}
+			not file {path}/index.php
 		}
 		handle @not_found {
 			reverse_proxy oddity:8081

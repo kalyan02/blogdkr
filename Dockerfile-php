@@ -1,5 +1,11 @@
 FROM php:8.2-fpm-alpine
 
+# Create user with matching UID/GID
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN addgroup -g ${USER_GID} appgroup && \
+    adduser -u ${USER_UID} -G appgroup -s /bin/sh -D appuser
+
 # Install system dependencies and common packages
 RUN apk update && \
     apk add --no-cache \
@@ -44,6 +50,12 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Set working directory
 WORKDIR /var/www
+
+# Change ownership of web directory
+RUN chown -R appuser:appgroup /var/www
+
+# Switch to non-root user
+USER appuser
 
 # Expose port 9000 for PHP-FPM
 EXPOSE 9000

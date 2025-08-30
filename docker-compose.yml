@@ -6,6 +6,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile-php
+      args:
+        USER_UID: 1000
+        USER_GID: 1000
     container_name: php
     volumes:
       - ./public_html:/var/www/html
@@ -24,7 +27,11 @@ services:
     build:
       context: .
       dockerfile: oddity/Dockerfile
+      args:
+        USER_UID: 1000
+        USER_GID: 1000
     restart: unless-stopped
+    working_dir: /var/www/content
     # env_file:
     #   - .env.dev
     environment:
@@ -32,7 +39,6 @@ services:
       BACKUP_SCHEDULE: "0 2 * * *"  # Daily at 2 AM
     volumes:
       - ./blogcontent:/var/www/content
-    working_dir: /var/www/content
     entrypoint: ["oddity"]
     command: ["run"]
     networks:
@@ -49,6 +55,8 @@ services:
       - ./caddy/logs:/var/log/caddy
       - ./public_html:/var/www/html
     restart: unless-stopped
+    ports:
+      - 80:80
     networks:
       - blog_network
 
