@@ -113,6 +113,33 @@ logs: ## Show logs for both services
 	@(sudo docker-compose logs -f $(SERVICE_CADDY) &)
 	@cd $(ODDITY_DIR) && make logs
 
+# oddity management
+.PHONY: oddity-build
+oddity-build: ## Build oddity container
+	docker-compose build oddity
+
+.PHONY: oddity-run
+oddity-up: ## start oddity service via docker-compose
+	docker-compose up -d oddity
+
+.PHONY: oddity-down
+oddity-down: ## stop oddity service via docker-compose
+	docker-compose stop oddity
+
+.PHONY: oddity-shell
+oddity-shell: ## open shell in oddity container
+	docker-compose exec oddity /bin/sh
+
+.PHONY: oddity-up
+oddity-up: ## start oddity service via docker-compose
+	docker-compose up -d oddity
+
+.PHONY: oddity-setup-full
+oddity-setup-full: ## full setup of oddity (config + db + dirs) inside container
+	docker-compose run --rm --entrypoint "" oddity oddity setup config
+	docker-compose run --rm --entrypoint "" oddity oddity setup tmpl
+	docker-compose run --rm --entrypoint "" oddity oddity setup auth
+
 
 # Troubleshooting
 .PHONY: debug

@@ -77,17 +77,6 @@ type ContentConfig struct {
 	AdminAddr      string   `toml:"admin_addr,omitempty"`
 }
 
-var DefaultConfig = ContentConfig{
-	ContentDir:     "content",
-	StaticDirs:     []string{"static"},
-	UploadDir:      "uploads",
-	SidecarDB:      "sqlite.db",
-	ThemeDir:       "tmpl",
-	DefaultNewHint: "blog",
-	Addr:           ":8081",
-	AdminAddr:      ":8082",
-}
-
 type SiteConfig struct {
 	Title       string           `toml:"title"`
 	Description string           `toml:"description,omitempty"`
@@ -100,6 +89,16 @@ type NavigationLink struct {
 	URL        string `json:"url" toml:"url"`
 	IsExternal bool   `json:"is_external,omitempty" toml:"is_external,omitempty"`
 	IsActive   bool   `json:"is_active,omitempty" toml:"is_active,omitempty"`
+}
+
+var DefaultConfig = ContentConfig{
+	ContentDir:     "content",
+	StaticDirs:     []string{"static"},
+	UploadDir:      "uploads",
+	SidecarDB:      "sqlite.db",
+	ThemeDir:       "tmpl",
+	DefaultNewHint: "blog",
+	Addr:           "0.0.0.0:8081",
 }
 
 var DefaultSiteConfig = SiteConfig{

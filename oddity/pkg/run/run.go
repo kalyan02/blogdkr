@@ -104,5 +104,5 @@ func StartServer(cfg config.Config) {
 	siteApp.RegisterRoutes(r)
 	authzApp.RegisterRoutes(r)
 
-	r.Run(":8081")
+	r.Run(cfg.Content.Addr) // listen and serve
 }

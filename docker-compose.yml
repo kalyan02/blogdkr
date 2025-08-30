@@ -20,6 +20,7 @@ services:
       start_period: 10s
 
   oddity:
+    container_name: oddity
     build:
       context: .
       dockerfile: oddity/Dockerfile
@@ -32,6 +33,7 @@ services:
     volumes:
       - ./blogcontent:/var/www/content
     working_dir: /var/www/content
+    entrypoint: ["oddity"]
     command: ["run"]
 
   # Caddy reverse proxy with PHP support
