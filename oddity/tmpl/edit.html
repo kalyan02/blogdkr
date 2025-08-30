@@ -85,12 +85,31 @@
             color: #dc3545;
             font-weight: bold;
         }
+
+        /* Fade navigation and sidebar on hover */
+        .nav-fade {
+            opacity: 0.15;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .nav-fade:hover {
+            opacity: 1;
+        }
+        
+        .sidebar-fade {
+            opacity: 0.05;
+            transition: opacity 0.3s ease-in-out;
+        }
+        
+        .sidebar-fade:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="font-mono bg-white min-h-screen">
     <div id="app">
         <!-- Navigation Bar -->
-        <div class="py-1 border-b-0 border-gray-100">
+        <div class="py-1 border-b-0 border-gray-100 nav-fade" :class="{ 'nav-fade': !distractionFree }">
             <div :class="'mx-auto px-2 pt-2 pb-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 ' + editorWidthOptions[editorWidth].containerClass">
                 <!-- Left: Navigation Links -->
                 <div class="flex gap-1 flex-wrap justify-center lg:justify-start" >
@@ -165,7 +184,7 @@
 
             <!-- Sidebar -->
             <div v-if="sidebarVisible && !distractionFree" 
-                 class="w-full flex-shrink-0 border-t pt-6" 
+                 class="w-full flex-shrink-0 border-t pt-6 sidebar-fade" 
                  :class="{ 
                      'lg:w-64 lg:border-t-0 lg:pt-0': !sidebarBelow,
                      'lg:w-full lg:mx-auto lg:border-t lg:pt-6': sidebarBelow

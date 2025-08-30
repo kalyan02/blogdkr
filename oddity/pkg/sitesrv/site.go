@@ -113,6 +113,17 @@ func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.Navigation
 	return links
 }
 
+func (s *SiteApp) backLinkToParent(path string) string {
+	if strings.Contains(path, "/") {
+		parentSlug := filepath.Dir(path)
+		parentSlug = strings.Trim(parentSlug, "./")
+		// add prefix
+		parentSlug = "/" + parentSlug
+		return parentSlug
+	}
+	return "/"
+}
+
 func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 	file, ok := s.SiteContent.DoPath(path)
 	if !ok {
@@ -138,6 +149,7 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
 		IsPrivate:       page.IsPrivate(),
 		IsAuthenticated: authz.IsAuthenticated(c),
+		BackLink:        s.backLinkToParent(page.Slug()),
 	}
 
 	c.HTML(200, "post.html", indexPage)
@@ -169,6 +181,7 @@ func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 		},
 		PageHTML:    page.SafeHTML(),
 		CreatedDate: page.DateCreated(),
+		BackLink:    s.backLinkToParent(page.Slug()),
 	}
 	//postPage.ModifiedDate = p.DateModified()
 
