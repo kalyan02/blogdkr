@@ -24,7 +24,7 @@
         }
     </script>
 </head>
-<body class="font-mono bg-white min-h-screen">
+<body class="font-mono bg-white min-h-screen flex flex-col">
     <!-- Navigation Bar -->
     <div class="py-1 border-b-0 border-gray-100">
         <div class="max-w-4xl mx-auto px-2 pb-2 pt-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 {{if .IsAuthenticated}} border-l border-l-green-400{{end}} {{if .IsPrivate}}border-b border-b-orange-300{{end}}">
@@ -47,7 +47,9 @@
                     {{.Name}}
                 </a>
                 {{end}}
+
                 {{ if and .NewPostHintSlug .IsAuthenticated }}
+                <div class="controls justify-start lg:justify-center flex flex-wrap gap-1 w-full lg:w-auto">
                     <input type="text" value="/{{.NewPostHintSlug}}" id="new-post-hint"
                       class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 cursor-pointer w-full max-w-60 lg:w-60" />
 
@@ -55,131 +57,141 @@
                       onclick="location.href='/admin/edit?path=' + document.getElementById('new-post-hint').value"
                       class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer" />
 
+                    <a href="{{.EditURL}}" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+                        Edit
+                    </a>
+
                     <a href="/auth" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
                         Auth
                     </a>
                     <a href="/auth/logout" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
                         Logout
                     </a>
-
+                </div>
                 {{end}}
+
             </div>
             {{end}}
         </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="max-w-4xl mx-auto px-4 py-8">
-        <!-- Page Header -->
-        <header class="mb-4 pb-4">
-            <h1 class="text-3xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
+    <!-- Main Content Wrapper -->
+    <div class="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+        <!-- Main Content -->
+        <div class="flex-1 px-4 py-8">
+            <!-- Page Header -->
+            <header class="mb-4 pb-4">
+                <h1 class="text-3xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
 
-            {{if or .CreatedDate .ModifiedDate .WordCount .ReadingTime}}
-            <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                {{if .CreatedDate}}
-                <span>Created {{.CreatedDate.Format "2006-01-02"}}</span>
+                {{if or .CreatedDate .ModifiedDate .WordCount .ReadingTime}}
+                <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                    {{if .CreatedDate}}
+                    <span>Created {{.CreatedDate.Format "2006-01-02"}}</span>
+                    {{end}}
+                    {{if .ModifiedDate}}
+                    {{if ne .CreatedDate.Format "2006-01-02" .ModifiedDate.Format "2006-01-02"}}
+                    <span>•</span>
+                    <span>Modified {{.ModifiedDate.Format "2006-01-02"}}</span>
+                    {{end}}
+                    {{end}}
+                    {{if .WordCount}}
+                    <span>•</span>
+                    <span>{{.WordCount}} words</span>
+                    {{end}}
+                    {{if .ReadingTime}}
+                    <span>•</span>
+                    <span>{{.ReadingTime}}m read</span>
+                    {{end}}
+                </div>
                 {{end}}
-                {{if .ModifiedDate}}
-                {{if ne .CreatedDate.Format "2006-01-02" .ModifiedDate.Format "2006-01-02"}}
-                <span>•</span>
-                <span>Modified {{.ModifiedDate.Format "2006-01-02"}}</span>
-                {{end}}
-                {{end}}
-                {{if .WordCount}}
-                <span>•</span>
-                <span>{{.WordCount}} words</span>
-                {{end}}
-                {{if .ReadingTime}}
-                <span>•</span>
-                <span>{{.ReadingTime}}m read</span>
-                {{end}}
-            </div>
-            {{end}}
-            
-            {{if .Tags}}
-            <div class="flex flex-wrap gap-2 mt-3">
-                {{range .Tags}}
-                <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                    {{.}}
-                </span>
-                {{end}}
-            </div>
-            {{end}}
-        </header>
 
-        <!-- Post Content -->
-        <article class="prose prose-sm max-w-none font-mono text-sm leading-relaxed">
-            {{.PageHTML}}
-        </article>
-
-        <!-- Post Footer -->
-        <footer class="mt-12 pt-8 border-t border-gray-100">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <!-- Back to posts -->
-                {{if .BackLink}}
-                <a href="{{.BackLink}}" class="text-xs text-gray-600 hover:text-gray-900 uppercase tracking-wider transition-colors">
-                    ← Back
-                </a>
+                {{if .Tags}}
+                <div class="flex flex-wrap gap-2 mt-3">
+                    {{range .Tags}}
+                    <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                        {{.}}
+                    </span>
+                    {{end}}
+                </div>
                 {{end}}
-                
-                <!-- Share or edit links could go here -->
-                <div class="flex gap-2 text-xs">
-                    {{if .IsAuthenticated}}
-                    {{if .EditURL}}
-                    <a href="{{.EditURL}}" class="text-gray-600 hover:text-gray-900 px-2 py-1 border border-gray-300 rounded transition-colors">
-                        Edit
+            </header>
+
+            <!-- Post Content -->
+            <article class="prose prose-sm max-w-none font-mono text-sm leading-relaxed">
+                {{.PageHTML}}
+            </article>
+
+            <!-- Post Footer -->
+            <footer class="mt-12 pt-8 border-t border-gray-100">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <!-- Back to posts -->
+                    {{if .BackLink}}
+                    <a href="{{.BackLink}}" class="text-xs text-gray-600 hover:text-gray-900 uppercase tracking-wider transition-colors">
+                        ← Back
                     </a>
                     {{end}}
-                    {{end}}
+
+                    <!-- Share or edit links could go here -->
+                    <div class="flex gap-2 text-xs">
+                        <!--
+                        {{if .IsAuthenticated}}
+                        {{if .EditURL}}
+                        <a href="{{.EditURL}}" class="text-gray-600 hover:text-gray-900 px-2 py-1 border border-gray-300 rounded transition-colors">
+                            Edit
+                        </a>
+                        {{end}}
+                        {{end}}
+                        -->
+                    </div>
                 </div>
+            </footer>
+
+            <!-- Wiki-style Links Section -->
+            {{if or .LinkedPages .Backlinks}}
+            <div class="mt-12 pt-8 border-t border-gray-100 space-y-8">
+                {{if .LinkedPages}}
+                <section>
+                    <h3 class="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Linked Pages</h3>
+                    <div class="space-y-2">
+                        {{range .LinkedPages}}
+                        <div>
+                            <a href="/{{.Slug}}" class="text-sm text-blue-600 hover:text-blue-800 transition-colors">
+                                {{.Title}}
+                            </a>
+                            {{if .Excerpt}}
+                            <p class="text-xs text-gray-600 mt-1">{{.Excerpt}}</p>
+                            {{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                </section>
+                {{end}}
+
+                {{if .Backlinks}}
+                <section>
+                    <h3 class="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Backlinks</h3>
+                    <div class="space-y-2">
+                        {{range .Backlinks}}
+                        <div>
+                            <a href="/{{.Slug}}" class="text-sm text-green-600 hover:text-green-800 transition-colors">
+                                {{.Title}}
+                            </a>
+                            {{if .Excerpt}}
+                            <p class="text-xs text-gray-600 mt-1">{{.Excerpt}}</p>
+                            {{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                </section>
+                {{end}}
             </div>
-        </footer>
-
-        <!-- Wiki-style Links Section -->
-        {{if or .LinkedPages .Backlinks}}
-        <div class="mt-12 pt-8 border-t border-gray-100 space-y-8">
-            {{if .LinkedPages}}
-            <section>
-                <h3 class="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Linked Pages</h3>
-                <div class="space-y-2">
-                    {{range .LinkedPages}}
-                    <div>
-                        <a href="/{{.Slug}}" class="text-sm text-blue-600 hover:text-blue-800 transition-colors">
-                            {{.Title}}
-                        </a>
-                        {{if .Excerpt}}
-                        <p class="text-xs text-gray-600 mt-1">{{.Excerpt}}</p>
-                        {{end}}
-                    </div>
-                    {{end}}
-                </div>
-            </section>
-            {{end}}
-
-            {{if .Backlinks}}
-            <section>
-                <h3 class="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Backlinks</h3>
-                <div class="space-y-2">
-                    {{range .Backlinks}}
-                    <div>
-                        <a href="/{{.Slug}}" class="text-sm text-green-600 hover:text-green-800 transition-colors">
-                            {{.Title}}
-                        </a>
-                        {{if .Excerpt}}
-                        <p class="text-xs text-gray-600 mt-1">{{.Excerpt}}</p>
-                        {{end}}
-                    </div>
-                    {{end}}
-                </div>
-            </section>
             {{end}}
         </div>
-        {{end}}
 
-        <!-- Site Footer -->
-        <div class="mt-16 pt-8 border-t border-gray-100 text-center">
+        <!-- Site Footer - Now at bottom of screen -->
+        <div class="mt-auto w-full px-4 pt-3 pb-6 border-t border-gray-100 text-center">
             <p class="text-xs text-gray-500">
-                Powered by <a href="https://github.com/your-repo/oddity" class="hover:text-gray-700">Oddity</a>
+                <!-- Powered by <a href="#" class="hover:text-gray-700">oddity</a> -->
             </p>
         </div>
     </div>
@@ -402,6 +414,15 @@
         }
         .prose .task-list-item input[type="checkbox"] {
             margin-right: 0.5rem;
+        }
+
+        .controls {
+            opacity: 0.15;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .controls:hover {
+            opacity: 1.0;
+            transition: opacity 0.3s ease-in-out;
         }
     </style>
 </body>

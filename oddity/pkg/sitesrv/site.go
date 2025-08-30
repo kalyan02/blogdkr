@@ -114,6 +114,9 @@ func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.Navigation
 }
 
 func (s *SiteApp) backLinkToParent(path string) string {
+	if path == "" || path == "." || path == "/" || path == "index" {
+		return ""
+	}
 	if strings.Contains(path, "/") {
 		parentSlug := filepath.Dir(path)
 		parentSlug = strings.Trim(parentSlug, "./")
