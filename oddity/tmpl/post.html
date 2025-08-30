@@ -24,7 +24,7 @@
         }
     </script>
 </head>
-<body class="font-mono bg-white min-h-screen flex flex-col">
+<body class="font-mono bg-white min-h-screen flex flex-col tracking-tight">
     <!-- Navigation Bar -->
     <div class="py-1 border-b-0 border-gray-100">
         <div class="max-w-4xl mx-auto px-2 pb-2 pt-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 {{if .IsAuthenticated}} border-l border-l-green-400{{end}} {{if .IsPrivate}}border-b border-b-orange-300{{end}}">
@@ -117,7 +117,7 @@
             </header>
 
             <!-- Post Content -->
-            <article class="prose prose-sm max-w-none font-mono text-sm leading-relaxed">
+            <article class="prose prose-sm max-w-none font-mono text-base leading-relaxed tracking-tight">
                 {{.PageHTML}}
             </article>
 
