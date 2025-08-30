@@ -2,6 +2,7 @@ package contentstuff
 
 import (
 	"html/template"
+	"math"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -128,11 +129,31 @@ func (p *Page) tryParseTimeField(field string) (time.Time, bool) {
 		}
 		// if integer type
 		val, _ := p.File.ParsedContent.Frontmatter.GetValue(field)
-		if intVal, ok := val.(int); ok && intVal != 0 {
-			return timeFromMilliOrSeconds(int64(intVal)), true
-		}
-		if int64Val, ok := val.(int64); ok && int64Val != 0 {
-			return timeFromMilliOrSeconds(int64Val), true
+		switch v := val.(type) {
+		case int:
+			if v != 0 {
+				return timeFromMilliOrSeconds(int64(v)), true
+			}
+		case int32:
+			if v != 0 {
+				return timeFromMilliOrSeconds(int64(v)), true
+			}
+		case int64:
+			if v != 0 {
+				return timeFromMilliOrSeconds(v), true
+			}
+		case uint:
+			if v != 0 {
+				return timeFromMilliOrSeconds(int64(v)), true
+			}
+		case uint32:
+			if v != 0 {
+				return timeFromMilliOrSeconds(int64(v)), true
+			}
+		case uint64:
+			if v != 0 && v <= math.MaxInt64 { // prevent overflow
+				return timeFromMilliOrSeconds(int64(v)), true
+			}
 		}
 	}
 	return time.Time{}, false

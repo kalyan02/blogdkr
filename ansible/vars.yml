@@ -17,3 +17,8 @@ ssh_public_keys:
   - "~/.ssh/devnetsec_ed25519.pub"
   # Add more keys as needed:
   # - "~/.ssh/another_key.pub"
+
+# fail2ban configuration
+# Set home_ip to your home IP address to whitelist it from fail2ban
+# Leave undefined or comment out to skip IP whitelisting
+# home_ip: "123.456.789.012"
