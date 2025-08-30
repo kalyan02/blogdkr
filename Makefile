@@ -34,6 +34,12 @@ up: ## Start all Docker services (PHP + Caddy)
 	@mkdir -p caddy/data caddy/config caddy/logs public_html
 	sudo docker-compose up -d
 
+.PHONY: dev
+dev: ## Start development environment
+	@echo "Starting development environment..."
+	@mkdir -p dev/data dev/config dev/logs
+	@sudo docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
 .PHONY: down
 down: ## Stop all Docker services
 	sudo docker-compose down

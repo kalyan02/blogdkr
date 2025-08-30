@@ -1,9 +1,15 @@
 /target
 /blogsync/target
 /blogsync/sync
+/blogcontent
 /caddy/data
 /caddy/logs
 /caddy/config
 /public_html
 /sync./idea
 /.idea
+/.DS_Store
+/.vscode
+*.log
+.DS_Store
+/foo
