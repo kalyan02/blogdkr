@@ -197,6 +197,10 @@ func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 
 func (s *SiteApp) createNewPostSlugHint(path *contentstuff.Page) string {
 	currSlug := path.Slug()
+	return s.createNewPostSlugHintFromPath(currSlug)
+}
+
+func (s *SiteApp) createNewPostSlugHintFromPath(currSlug string) string {
 	slugDir := filepath.Dir(currSlug)
 	if slugDir == "." {
 		slugDir = s.SiteContent.Config.DefaultNewHint
@@ -230,7 +234,9 @@ func (s *SiteApp) render404(c *gin.Context) {
 
 func (s *SiteApp) render404ButMaybeCreate(c *gin.Context, path string) {
 	postPage := contentstuff.PostPage{
-		Site: s.Config.Site,
+		Site:            s.Config.Site,
+		IsAuthenticated: authz.IsAuthenticated(c),
+		NewPostHintSlug: s.createNewPostSlugHintFromPath(path),
 	}
 	postPage.Meta = contentstuff.PageMeta{
 		Title: "404 Not Found",

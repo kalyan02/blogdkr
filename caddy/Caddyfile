@@ -22,20 +22,25 @@
 
 	# Everything else
 	handle {
-		# root * /var/www/html
+		root * /var/www/html
 
-		# # Handles .php and directories with index.php
-		# php_fastcgi localhost:9000 {
-		# 	try_files {path} {path}/index.php =404
-		# }
+		# Handle .php files and directories with index.php
+		php_fastcgi php:9000 {
+			try_files {path} {path}/index.php =404
+		}
 
-		# # Serve static files, hide .php from being served as plain files
-		# file_server {
-		# 	hide *.php
-		# }
+		# Serve static files, hide .php from being served as plain files
+		file_server {
+			hide *.php
+		}
 
-		# Proxy all routes to the API server
-		reverse_proxy oddity:8081
+		# If no static file or PHP file found, proxy to oddity
+		@not_found {
+			not file
+		}
+		handle @not_found {
+			reverse_proxy oddity:8081
+		}
 	}
 }
 
