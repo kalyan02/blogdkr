@@ -238,13 +238,40 @@
                              @dragleave.prevent="isDragOver = false"
                              class="border-2 border-dashed border-gray-300 p-3 text-center text-gray-600 mb-3 cursor-pointer bg-gray-50 text-xs hover:border-blue-500 hover:bg-blue-50 transition-colors rounded"
                              :class="{ 'border-blue-500 bg-blue-50 text-blue-600': isDragOver }">
-                            Drop files here or click to upload
+                            Drop files here or click to select
                         </div>
                         <input ref="fileInput" type="file" multiple class="hidden" @change="handleFileSelect">
                         
                         <!-- Upload Progress -->
                         <div v-if="uploading" class="mb-3 text-xs text-blue-600">
                             Uploading... [[ uploadProgress ]]%
+                        </div>
+                        
+                        <!-- Pending Files (before upload) -->
+                        <div v-if="pendingFiles.length > 0" class="mb-3">
+                            <div class="text-xs text-gray-600 mb-2">Files ready for upload:</div>
+                            <div class="space-y-2">
+                                <div v-for="file in pendingFiles" :key="file.id" class="bg-gray-50 border border-gray-200 rounded p-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-semibold" :class="{ 'text-blue-600': file.type === 'image', 'text-gray-600': file.type === 'file' }">
+                                            [[ file.type === 'image' ? '[IMG]' : '[FILE]' ]] [[ file.name ]]
+                                        </span>
+                                        <button @click="removePendingFile(file.id)" class="text-xs text-red-600 hover:text-red-800">×</button>
+                                    </div>
+                                    
+                                    <!-- Image resize controls for pending images -->
+                                    <div v-if="file.type === 'image'" class="mt-2">
+                                        <div class="flex gap-1 items-center">
+                                            <input v-model="file.resizeWidth" type="number" placeholder="Width" class="w-16 p-1 border border-gray-300 rounded text-xs">
+                                            <input v-model="file.resizeHeight" type="number" placeholder="Height" class="w-16 p-1 border border-gray-300 rounded text-xs">
+                                            <span class="text-xs text-gray-500">(optional)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button @click="uploadPendingFiles" class="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700" :disabled="uploading">
+                                Upload [[ pendingFiles.length ]] file[[ pendingFiles.length > 1 ? 's' : '' ]]
+                            </button>
                         </div>
                         
                         <!-- File List -->
@@ -348,6 +375,15 @@
     </div>
 
     <script>
+        // Configuration constants
+        const CONFIG = {
+            DEFAULT_IMAGE_WIDTH: 1600,
+            DEFAULT_IMAGE_HEIGHT: 2400,
+            UPLOAD_TIMEOUT: 120000, // 2 minutes
+            MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB
+            SUPPORTED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            EDITOR_MIN_HEIGHT: 600
+        };
 
         function tryJSON(input, defaultObj) {
             if (input === "") {
@@ -377,7 +413,7 @@
                     theme: "light",
                     autoResize: true,
                     fontSize: '14px',
-                    minHeight: '600px',
+                    minHeight: CONFIG.EDITOR_MIN_HEIGHT + 'px',
                     onChange: (value) => {
                         app.content = value;
                     }
@@ -444,6 +480,7 @@
                         { name: 'Preview', href: '/preview/untitled', target: '_blank', emoji: '👁️', primary: true }
                     ],
                     files: [],
+                    pendingFiles: [],
                     searchResults: [
                         { id: 1, title: 'Getting Started' },
                         { id: 2, title: 'Features Overview' },
@@ -568,51 +605,87 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     const textarea = event.target
                     textarea.style.height = 'auto'
                     console.log("Scroll height:", textarea.scrollHeight)
-                    textarea.style.height = Math.max(600, textarea.scrollHeight) + 'px'
+                    textarea.style.height = Math.max(CONFIG.EDITOR_MIN_HEIGHT, textarea.scrollHeight) + 'px'
                 },
                 triggerFileInput() {
                     this.$refs.fileInput.click()
                 },
                 handleFileSelect(event) {
                     const files = Array.from(event.target.files)
-                    this.uploadFiles(files)
+                    this.addPendingFiles(files)
                 },
                 handleDrop(event) {
                     event.preventDefault()
                     this.isDragOver = false
                     const files = Array.from(event.dataTransfer.files)
-                    this.uploadFiles(files)
+                    this.addPendingFiles(files)
                 },
-                async uploadFiles(files) {
-                    if (this.uploading) return
+                addPendingFiles(files) {
+                    files.forEach(file => {
+                        const pendingFile = {
+                            id: Date.now() + Math.random(),
+                            name: file.name,
+                            type: file.type.startsWith('image/') ? 'image' : 'file',
+                            file: file, // Store the actual file object for upload
+                            resizeWidth: file.type.startsWith('image/') ? CONFIG.DEFAULT_IMAGE_WIDTH.toString() : '',
+                            resizeHeight: file.type.startsWith('image/') ? CONFIG.DEFAULT_IMAGE_HEIGHT.toString() : ''
+                        }
+                        this.pendingFiles.push(pendingFile)
+                    })
+                    // Clear the file input
+                    this.$refs.fileInput.value = ''
+                },
+                removePendingFile(fileId) {
+                    const index = this.pendingFiles.findIndex(f => f.id === fileId)
+                    if (index > -1) {
+                        this.pendingFiles.splice(index, 1)
+                    }
+                },
+                async uploadPendingFiles() {
+                    if (this.uploading || this.pendingFiles.length === 0) return
                     
                     this.uploading = true
                     this.uploadProgress = 0
 
-                    const formData = new FormData()
-                    files.forEach(file => {
-                        formData.append('files', file)
-                    })
-                    formData.append('fullSlug', defaultLoadedData.fullSlug || '')
-
-                    try {
-                        const response = await fetch('/admin/upload', {
-                            method: 'POST',
-                            body: formData
-                        })
-
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`)
-                        }
-
-                        const data = await response.json()
+                    // Process files individually to handle different resize dimensions
+                    const uploadResults = []
+                    
+                    for (let i = 0; i < this.pendingFiles.length; i++) {
+                        const pendingFile = this.pendingFiles[i]
+                        this.uploadProgress = Math.round((i / this.pendingFiles.length) * 100)
                         
-                        // Add uploaded files to the UI
-                        for (const file of files) {
+                        try {
+                            const formData = new FormData()
+                            formData.append('files', pendingFile.file)
+                            formData.append('fullSlug', defaultLoadedData.fullSlug || '')
+                            
+                            // Add resize parameters if it's an image with dimensions
+                            if (pendingFile.type === 'image') {
+                                if (pendingFile.resizeWidth) {
+                                    formData.append('width', pendingFile.resizeWidth.toString())
+                                }
+                                if (pendingFile.resizeHeight) {
+                                    formData.append('height', pendingFile.resizeHeight.toString())
+                                }
+                            }
+
+                            const response = await fetch('/admin/upload', {
+                                method: 'POST',
+                                body: formData
+                            })
+
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`)
+                            }
+
+                            const data = await response.json()
+                            uploadResults.push(...data.uploaded)
+                            
+                            // Add to UI files
                             const newFile = {
                                 id: Date.now() + Math.random(),
-                                name: file.name,
-                                type: file.type.startsWith('image/') ? 'image' : 'file',
+                                name: pendingFile.name,
+                                type: pendingFile.type,
                                 menuOpen: false,
                                 resizeOpen: false,
                                 resizeWidth: '',
@@ -620,20 +693,36 @@ Start writing your content here. The editor is now centered with a fixed maximum
                                 uploaded: true
                             }
                             this.files.push(newFile)
+                            
+                            // Insert markdown for all uploaded images (not just those with resize dimensions)
+                            if (pendingFile.type === 'image') {
+                                const filePath = `/uploads/${defaultLoadedData.fullSlug || ''}/${pendingFile.name}`
+                                let markdown = `![${pendingFile.name}](${filePath}`
+                                // Only add size attributes if dimensions were specified
+                                if (pendingFile.resizeWidth || pendingFile.resizeHeight) {
+                                    //markdown += ` =${pendingFile.resizeWidth || ''}x${pendingFile.resizeHeight || ''}`
+                                }
+                                markdown += ')'
+                                this.insertAtCursor(markdown)
+                            }
+                            
+                        } catch (error) {
+                            console.error(`Error uploading file ${pendingFile.name}:`, error)
+                            alert(`Error uploading file ${pendingFile.name}: ${error.message}`)
+                            this.uploading = false
+                            this.uploadProgress = 0
+                            return
                         }
-
-                        this.uploadProgress = 100
-                        console.log('Files uploaded successfully:', data.uploaded)
-                        
-                    } catch (error) {
-                        console.error('Error uploading files:', error)
-                        alert('Error uploading files: ' + error.message)
-                    } finally {
-                        this.uploading = false
-                        this.uploadProgress = 0
-                        // Clear the file input
-                        this.$refs.fileInput.value = ''
                     }
+
+                    this.uploadProgress = 100
+                    console.log('Files uploaded successfully:', uploadResults)
+                    
+                    // Clear pending files
+                    this.pendingFiles = []
+                    
+                    this.uploading = false
+                    this.uploadProgress = 0
                 },
                 async loadFiles() {
                     if (!defaultLoadedData.fullSlug) return
@@ -727,7 +816,7 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     const filePath = `/uploads/${defaultLoadedData.fullSlug || ''}/${file.name}`
                     let markdown = `![${file.name}](${filePath}`
                     if (width || height) {
-                        markdown += ` =${width || ''}x${height || ''}`
+                        // markdown += ` =${width || ''}x${height || ''}`
                     }
                     markdown += ')'
                     this.insertAtCursor(markdown)

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -48,158 +46,10 @@ func (s *AdminApp) RegisterRoutes(r *gin.Engine) {
 	adminGroup.POST("/upload-delete", s.HandleFileDelete)
 }
 
-func (s *AdminApp) HandleFileUpload(c *gin.Context) {
-	form, err := c.MultipartForm()
-	if err != nil {
-		c.JSON(400, gin.H{"error": "invalid multipart form"})
-		return
-	}
-
-	fullSlug := c.PostForm("fullSlug")
-	if fullSlug == "" {
-		c.JSON(400, gin.H{"error": "fullSlug parameter is required"})
-		return
-	}
-
-	files := form.File["files"]
-	if len(files) == 0 {
-		c.JSON(400, gin.H{"error": "no files uploaded"})
-		return
-	}
-
-	// Create post-specific upload directory
-	uploadDir := filepath.Join(s.SiteContent.Config.UploadDir, fullSlug)
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		c.JSON(500, gin.H{"error": fmt.Sprintf("failed to create upload directory: %v", err)})
-		return
-	}
-
-	var uploadedFiles []string
-	for _, fileHeader := range files {
-		filename := filepath.Base(fileHeader.Filename)
-		targetPath := filepath.Join(uploadDir, filename)
-
-		if err := c.SaveUploadedFile(fileHeader, targetPath); err != nil {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("failed to save file: %v", err)})
-			return
-		}
-		uploadedFiles = append(uploadedFiles, fmt.Sprintf("/uploads/%s/%s", fullSlug, filename))
-		log.Infof("Uploaded file: %s", targetPath)
-	}
-
-	c.JSON(200, gin.H{"uploaded": uploadedFiles})
-}
-
 type FileInfo struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 	Size int64  `json:"size"`
-}
-
-func (s *AdminApp) HandleUploadsList(c *gin.Context) {
-	fullSlug := c.Query("fullSlug")
-	if fullSlug == "" {
-		c.JSON(400, gin.H{"error": "fullSlug parameter is required"})
-		return
-	}
-
-	uploadDir := filepath.Join(s.SiteContent.Config.UploadDir, fullSlug)
-
-	// Check if directory exists
-	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		c.JSON(200, gin.H{"files": []FileInfo{}})
-		return
-	}
-
-	var files []FileInfo
-	err := filepath.WalkDir(uploadDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-
-		fileType := "file"
-		if strings.HasPrefix(getContentType(path), "image/") {
-			fileType = "image"
-		}
-
-		files = append(files, FileInfo{
-			Name: d.Name(),
-			Type: fileType,
-			Size: info.Size(),
-		})
-		return nil
-	})
-
-	if err != nil {
-		c.JSON(500, gin.H{"error": fmt.Sprintf("failed to list files: %v", err)})
-		return
-	}
-
-	c.JSON(200, gin.H{"files": files})
-}
-
-func (s *AdminApp) HandleFileDelete(c *gin.Context) {
-	var req struct {
-		FullSlug string `json:"fullSlug"`
-		Filename string `json:"filename"`
-	}
-
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "invalid JSON body"})
-		return
-	}
-
-	if req.FullSlug == "" || req.Filename == "" {
-		c.JSON(400, gin.H{"error": "fullSlug and filename are required"})
-		return
-	}
-
-	// Security: ensure filename doesn't contain path traversal
-	if strings.Contains(req.Filename, "..") || strings.Contains(req.Filename, "/") || strings.Contains(req.Filename, "\\") {
-		c.JSON(400, gin.H{"error": "invalid filename"})
-		return
-	}
-
-	filePath := filepath.Join(s.SiteContent.Config.UploadDir, req.FullSlug, req.Filename)
-
-	if err := os.Remove(filePath); err != nil {
-		if os.IsNotExist(err) {
-			c.JSON(404, gin.H{"error": "file not found"})
-		} else {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("failed to delete file: %v", err)})
-		}
-		return
-	}
-
-	log.Infof("Deleted file: %s", filePath)
-	c.JSON(200, gin.H{"success": true})
-}
-
-func getContentType(filename string) string {
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-	case ".svg":
-		return "image/svg+xml"
-	case ".webp":
-		return "image/webp"
-	default:
-		return "application/octet-stream"
-	}
 }
 
 func (s *AdminApp) HandleEditPageData(c *gin.Context) {
