@@ -26,7 +26,8 @@ RUN apk add --no-cache \
     ca-certificates \
     curl \
     tzdata \
-    sqlite && \
+    sqlite \
+    imagemagick && \
     rm -rf /var/cache/apk/*
 
 # Create non-root user

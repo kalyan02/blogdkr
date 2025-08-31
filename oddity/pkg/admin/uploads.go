@@ -2,9 +2,11 @@ package admin
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -60,11 +62,13 @@ func (s *AdminApp) HandleFileUpload(c *gin.Context) {
 		filename := filepath.Base(fileHeader.Filename)
 		targetPath := filepath.Join(uploadDir, filename)
 
-		// Check if this is an image and should be resized
+		// Check if this is an image and should be processed
 		isImage := isImageFile(filename)
-		shouldResize := isImage && (resizeWidth > 0 || resizeHeight > 0)
+		ext := strings.ToLower(filepath.Ext(filename))
+		isHeif := ext == ".heic" || ext == ".heif"
+		shouldProcess := isImage && ((resizeWidth > 0 || resizeHeight > 0) || isHeif)
 
-		if shouldResize {
+		if shouldProcess {
 			// Process and resize image
 			if err := s.processAndSaveImage(fileHeader, targetPath, resizeWidth, resizeHeight); err != nil {
 				c.JSON(500, gin.H{"error": fmt.Sprintf("failed to process image %s: %v", filename, err)})
@@ -78,8 +82,12 @@ func (s *AdminApp) HandleFileUpload(c *gin.Context) {
 			}
 		}
 
-		uploadedFiles = append(uploadedFiles, fmt.Sprintf("/uploads/%s/%s", fullSlug, filename))
-		logrus.Infof("Uploaded file: %s (resized: %v)", targetPath, shouldResize)
+		finalFilename := filename
+		if isHeif {
+			finalFilename = strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
+		}
+		uploadedFiles = append(uploadedFiles, fmt.Sprintf("/uploads/%s/%s", fullSlug, finalFilename))
+		logrus.Infof("Uploaded file: %s (processed: %v)", targetPath, shouldProcess)
 	}
 
 	c.JSON(200, gin.H{"uploaded": uploadedFiles})
@@ -188,6 +196,8 @@ func getContentType(filename string) string {
 		return "image/svg+xml"
 	case ".webp":
 		return "image/webp"
+	case ".heic", ".heif":
+		return "image/heif"
 	default:
 		return "application/octet-stream"
 	}
@@ -198,6 +208,12 @@ func isImageFile(filename string) bool {
 }
 
 func (s *AdminApp) processAndSaveImage(fileHeader *multipart.FileHeader, targetPath string, width, height int) error {
+	// Check if this is a HEIF file that needs conversion
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if ext == ".heic" || ext == ".heif" {
+		return s.processHeifImage(fileHeader, targetPath, width, height)
+	}
+
 	// Open uploaded file
 	src, err := fileHeader.Open()
 	if err != nil {
@@ -206,7 +222,7 @@ func (s *AdminApp) processAndSaveImage(fileHeader *multipart.FileHeader, targetP
 	defer src.Close()
 
 	// Decode image
-	img, err := imaging.Decode(src)
+	img, err := imaging.Decode(src, imaging.AutoOrientation(true))
 	if err != nil {
 		return fmt.Errorf("failed to decode image: %v", err)
 	}
@@ -227,4 +243,51 @@ func (s *AdminApp) processAndSaveImage(fileHeader *multipart.FileHeader, targetP
 
 	// Save the processed image (imaging.Save automatically detects format from extension)
 	return imaging.Save(img, targetPath)
+}
+
+func (s *AdminApp) processHeifImage(fileHeader *multipart.FileHeader, targetPath string, width, height int) error {
+	// Create temporary file for HEIF input
+	tmpFile, err := os.CreateTemp("", "heif_*.heic")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Copy uploaded file to temp file
+	src, err := fileHeader.Open()
+	if err != nil {
+		return fmt.Errorf("failed to open uploaded file: %v", err)
+	}
+	defer src.Close()
+
+	if _, err := io.Copy(tmpFile, src); err != nil {
+		return fmt.Errorf("failed to copy to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	// Convert HEIF to JPEG using ImageMagick, auto-orient and resize if needed
+	args := []string{tmpFile.Name(), "-auto-orient"}
+
+	if width > 0 || height > 0 {
+		if width > 0 && height > 0 {
+			args = append(args, "-resize", fmt.Sprintf("%dx%d>", width, height))
+		} else if width > 0 {
+			args = append(args, "-resize", fmt.Sprintf("%dx", width))
+		} else {
+			args = append(args, "-resize", fmt.Sprintf("x%d", height))
+		}
+	}
+
+	// Change extension to jpg for output
+	jpgPath := strings.TrimSuffix(targetPath, filepath.Ext(targetPath)) + ".jpg"
+	args = append(args, jpgPath)
+
+	cmd := exec.Command("magick", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ImageMagick conversion failed: %v, output: %s", err, string(output))
+	}
+
+	logrus.Infof("Converted HEIF to JPEG: %s -> %s", fileHeader.Filename, jpgPath)
+	return nil
 }

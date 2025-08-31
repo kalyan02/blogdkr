@@ -581,6 +581,11 @@ Start writing your content here. The editor is now centered with a fixed maximum
                         
                         console.log('Content saved successfully!');
                         // alert('Content saved successfully!');
+
+                        //await this.loadHistory(); // Refresh history after save
+                        // load history asynchronously without blocking
+                        this.loadHistory();
+
                     } catch (error) {
                         console.error('Error saving content:', error);
                         alert('Error saving content: ' + error.message);
@@ -681,10 +686,14 @@ Start writing your content here. The editor is now centered with a fixed maximum
                             const data = await response.json()
                             uploadResults.push(...data.uploaded)
                             
-                            // Add to UI files
+                            // Get the actual uploaded filename from server response
+                            const uploadedPath = data.uploaded[0] // Should be something like "/uploads/slug/filename.jpg"
+                            const actualFilename = uploadedPath.split('/').pop() // Extract just the filename
+                            
+                            // Add to UI files with the actual filename
                             const newFile = {
                                 id: Date.now() + Math.random(),
-                                name: pendingFile.name,
+                                name: actualFilename,
                                 type: pendingFile.type,
                                 menuOpen: false,
                                 resizeOpen: false,
@@ -694,10 +703,9 @@ Start writing your content here. The editor is now centered with a fixed maximum
                             }
                             this.files.push(newFile)
                             
-                            // Insert markdown for all uploaded images (not just those with resize dimensions)
+                            // Insert markdown for all uploaded images using the actual filename
                             if (pendingFile.type === 'image') {
-                                const filePath = `/uploads/${defaultLoadedData.fullSlug || ''}/${pendingFile.name}`
-                                let markdown = `![${pendingFile.name}](${filePath}`
+                                let markdown = `![${actualFilename}](${uploadedPath}`
                                 // Only add size attributes if dimensions were specified
                                 if (pendingFile.resizeWidth || pendingFile.resizeHeight) {
                                     //markdown += ` =${pendingFile.resizeWidth || ''}x${pendingFile.resizeHeight || ''}`
