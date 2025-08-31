@@ -67,7 +67,12 @@
 # }
 
 # Plain HTTP
-:80 {
+
+http://kalyanchakravarthy.net, http://www.kalyanchakravarthy.net {
+	redir https://namburi.org
+}
+
+namburi.org:80 {
 	import logging
 	import security_headers
 	import app_routes

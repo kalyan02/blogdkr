@@ -130,6 +130,17 @@ oddity-setup-full: ## full setup of oddity (config + db + dirs) inside container
 	docker-compose run --rm --entrypoint "" oddity oddity setup tmpl
 	docker-compose run --rm --entrypoint "" oddity oddity setup auth
 
+.PHONY: oddity-update
+oddity-update: ## Update repo, rebuild and restart
+	@if git pull --rebase; then \
+		echo "✓ Repository updated successfully"; \
+	else \
+		echo "⚠ Git pull failed (likely due to local changes) - continuing with rebuild..."; \
+	fi
+	docker-compose build oddity
+	docker-compose down oddity
+	docker-compose up -d oddity
+
 .PHONY: oddity-tmpl
 oddity-tmpl: ## just setup tmpls
 	docker-compose run --rm --entrypoint "" oddity oddity setup tmpl --force
