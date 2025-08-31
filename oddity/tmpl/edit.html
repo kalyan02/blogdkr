@@ -340,13 +340,13 @@
                     <h3 @click="toggleSection('history')" 
                         class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
                         History
+                        <span v-if="historyLoading" class="text-xs text-gray-400">↻</span>
                         <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.history }">▼</span>
                     </h3>
                     <div v-show="sections.history">
-                        <div v-if="historyLoading" class="text-xs text-gray-500 p-2">Loading history...</div>
-                        <div v-else-if="historyError" class="text-xs text-red-500 p-2">[[ historyError ]]</div>
-                        <div v-else-if="history.length === 0" class="text-xs text-gray-500 p-2">No history available</div>
-                        <div v-else class="space-y-2">
+                        <div v-if="historyError" class="text-xs text-red-500 p-2 mb-2">[[ historyError ]]</div>
+                        <div v-if="!historyLoading && history.length === 0" class="text-xs text-gray-500 p-2">No history available</div>
+                        <div v-if="history.length > 0" class="space-y-2">
                             <div v-for="(item, index) in history" :key="index" class="border border-gray-200 rounded">
                                 <div @click="toggleHistoryItem(index)" 
                                      class="p-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between">
@@ -1007,6 +1007,7 @@ Start writing your content here. The editor is now centered with a fixed maximum
 
                     this.historyLoading = true;
                     this.historyError = null;
+                    // Keep existing history content visible during loading
 
                     try {
                         const response = await fetch(`/admin/edit-data?path=${encodeURIComponent(defaultLoadedData.fullSlug)}&action=history`);
@@ -1016,6 +1017,7 @@ Start writing your content here. The editor is now centered with a fixed maximum
                         }
 
                         const data = await response.json();
+                        // Only update history after successful load
                         this.history = (data.history || []).map(item => ({
                             ...item,
                             expanded: false
@@ -1023,6 +1025,7 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     } catch (error) {
                         console.error('Error loading history:', error);
                         this.historyError = 'Failed to load history: ' + error.message;
+                        // Don't clear existing history on error
                     } finally {
                         this.historyLoading = false;
                     }
