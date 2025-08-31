@@ -138,6 +138,7 @@ oddity-update: ## Update repo, rebuild and restart
 		echo "⚠ Git pull failed (likely due to local changes) - continuing with rebuild..."; \
 	fi
 	docker-compose build oddity
+	docker-compose run --rm --entrypoint "" oddity oddity setup tmpl --force
 	docker-compose down oddity
 	docker-compose up -d oddity
 
