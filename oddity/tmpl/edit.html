@@ -401,14 +401,14 @@
         var defaultLoadedData = tryJSON("{{.Data}}", {});
 
 
-        var editor = null;
+        var overtypeEditor = null;
         // document on load
         document.addEventListener("DOMContentLoaded", function() {
             // Create a single editor
             const OT = window.OverType.default || window.OverType;
             if(document.getElementsByClassName("richeditor").length > 0) {
                 // document.getElementsByClassName("editorboxreal")[0].style.display = 'none';
-                editor = new OT(".richeditor", {
+                overtypeEditor = new OT(".richeditor", {
                     value: defaultLoadedData.content || '',
                     theme: "light",
                     autoResize: true,
@@ -416,9 +416,26 @@
                     minHeight: CONFIG.EDITOR_MIN_HEIGHT + 'px',
                     onChange: (value) => {
                         app.content = value;
+                    },
+                    textAreaProps: {
+                        spellcheck: 'true',
+                        lang: 'en',
                     }
-                })
+                });
+
+                for (var i = 0; i < overtypeEditor.length; i++) {
+                    overtypeEditor[i].textarea.setAttribute('autocomplete', 'on');
+                    overtypeEditor[i].textarea.setAttribute('autocorrect', 'on');
+                    overtypeEditor[i].textarea.setAttribute('autocapitalize', 'on');
+                    overtypeEditor[i].textarea.setAttribute('spellcheck', 'true');
+                    overtypeEditor[i].textarea.setAttribute('data-gramm', 'true');
+                    overtypeEditor[i].textarea.setAttribute('data-gramm_editor', 'true');
+                    overtypeEditor[i].textarea.setAttribute('data-enable-grammarly', 'true');
+                }
+
             }
+
+            //
 
             // set hint
             var hintInput = document.getElementById("new-post-hint");
