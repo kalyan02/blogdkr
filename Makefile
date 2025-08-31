@@ -109,7 +109,7 @@ oddity-build: ## Build oddity container
 	DOCKER_BUILDKIT=1 docker-compose build oddity
 
 .PHONY: oddity-run
-oddity-up: ## start oddity service via docker-compose
+oddity-run: ## start oddity service via docker-compose
 	docker-compose up oddity
 
 .PHONY: oddity-down
