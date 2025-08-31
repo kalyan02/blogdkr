@@ -431,6 +431,11 @@
                     overtypeEditor[i].textarea.setAttribute('data-gramm', 'true');
                     overtypeEditor[i].textarea.setAttribute('data-gramm_editor', 'true');
                     overtypeEditor[i].textarea.setAttribute('data-enable-grammarly', 'true');
+                    
+                    // Add paste event listener for image paste
+                    overtypeEditor[i].textarea.addEventListener('paste', function(e) {
+                        app.handlePaste(e);
+                    });
                 }
 
             }
@@ -443,6 +448,16 @@
             {
                 hintInput.value = defaultLoadedData.newPostHintSlug;
             }
+
+            // Add Cmd+S / Ctrl+S keyboard shortcut for save
+            document.addEventListener('keydown', function(e) {
+                if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                    e.preventDefault(); // Prevent browser save dialog
+                    if (app && app.saveContent) {
+                        app.saveContent();
+                    }
+                }
+            });
 
         });
 
@@ -722,13 +737,8 @@ Start writing your content here. The editor is now centered with a fixed maximum
                             
                             // Insert markdown for all uploaded images using the actual filename
                             if (pendingFile.type === 'image') {
-                                let markdown = `![${actualFilename}](${uploadedPath}`
-                                // Only add size attributes if dimensions were specified
-                                if (pendingFile.resizeWidth || pendingFile.resizeHeight) {
-                                    //markdown += ` =${pendingFile.resizeWidth || ''}x${pendingFile.resizeHeight || ''}`
-                                }
-                                markdown += ')'
-                                this.insertAtCursor(markdown)
+                                // Use newline insertion for automatic uploads
+                                this.insertImageWithNewlines(actualFilename, uploadedPath)
                             }
                             
                         } catch (error) {
@@ -912,6 +922,75 @@ Start writing your content here. The editor is now centered with a fixed maximum
                         textarea.focus()
                         textarea.setSelectionRange(start + text.length, start + text.length)
                     })
+                },
+                insertAtCursorWithNewlines(text) {
+                    const textarea = document.getElementsByClassName("overtype-input")[0];
+                    const start = textarea.selectionStart
+                    const end = textarea.selectionEnd
+                    
+                    // Check if we need leading newline (not at start of line)
+                    const beforeCursor = this.content.substring(0, start);
+                    const needsLeadingNewline = beforeCursor.length > 0 && !beforeCursor.endsWith('\n');
+                    
+                    // Check if we need trailing newline (not followed by newline)
+                    const afterCursor = this.content.substring(end);
+                    const needsTrailingNewline = afterCursor.length > 0 && !afterCursor.startsWith('\n');
+                    
+                    // Build the text to insert with appropriate newlines
+                    let textToInsert = '';
+                    if (needsLeadingNewline) textToInsert += '\n';
+                    textToInsert += text;
+                    if (needsTrailingNewline) textToInsert += '\n';
+                    
+                    textarea.value = this.content.substring(0, start) + textToInsert + this.content.substring(end)
+                    this.$nextTick(() => {
+                        textarea.focus()
+                        textarea.setSelectionRange(start + textToInsert.length, start + textToInsert.length)
+                    })
+                },
+                insertImageWithNewlines(filename, uploadedPath) {
+                    const markdown = `![${filename}](${uploadedPath})`;
+                    this.insertAtCursorWithNewlines(markdown);
+                },
+                async handlePaste(event) {
+                    const clipboardItems = event.clipboardData?.items;
+                    if (!clipboardItems) return;
+
+                    const imageFiles = [];
+                    
+                    // Check each clipboard item for images
+                    for (let i = 0; i < clipboardItems.length; i++) {
+                        const item = clipboardItems[i];
+                        if (item.type.startsWith('image/')) {
+                            const file = item.getAsFile();
+                            if (file) {
+                                // Generate unique filename with timestamp
+                                const timestamp = Date.now();
+                                const extension = item.type === 'image/png' ? 'png' : 
+                                                 item.type === 'image/jpeg' ? 'jpg' :
+                                                 item.type === 'image/gif' ? 'gif' :
+                                                 item.type === 'image/webp' ? 'webp' : 'png';
+                                const filename = `pasted-image-${timestamp}.${extension}`;
+                                
+                                // Create a new File object with our custom name
+                                const namedFile = new File([file], filename, { type: file.type });
+                                imageFiles.push(namedFile);
+                            }
+                        }
+                    }
+
+                    if (imageFiles.length > 0) {
+                        // Prevent default paste behavior for images
+                        event.preventDefault();
+                        
+                        // Add images as pending files
+                        this.addPendingFiles(imageFiles);
+                        
+                        // Auto-upload the pasted images
+                        await this.uploadPendingFiles();
+                        
+                        console.log(`Pasted and uploaded ${imageFiles.length} image(s)`);
+                    }
                 },
                 performSearch() {
                     console.log('Searching for:', this.searchQuery)
