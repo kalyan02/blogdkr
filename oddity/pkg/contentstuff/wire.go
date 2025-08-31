@@ -313,6 +313,46 @@ func (w *Wire) executeQuery(ctx *FileDetail, query *QueryAST) ([]string, error) 
 	}
 }
 
+func (w *Wire) TriggerDependencyUpdates(changedFile string) error {
+	dependentFiles := w.FindDependencies(changedFile)
+	for _, filePath := range dependentFiles {
+		fileDetail, exists := w.content.DoPath(filePath)
+		if !exists {
+			continue
+		}
+		queries, exists := w.queries[filePath]
+		if !exists {
+			continue
+		}
+		for _, query := range queries {
+			if w.shouldRefreshQuery(query, changedFile, fileDetail) {
+				if err := w.updateQuery(&fileDetail, query); err != nil {
+					return fmt.Errorf("error updating query in %s: %v", query.FilePath, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// FindDependencies will find all files that are affected by a given file change
+func (w *Wire) FindDependencies(changedFile string) []string {
+	dependentFiles := make([]string, 0)
+	for filePath, queries := range w.queries {
+		fd, exists := w.content.DoPath(changedFile)
+		if !exists {
+			continue
+		}
+		for _, query := range queries {
+			if w.shouldRefreshQuery(query, changedFile, fd) {
+				dependentFiles = append(dependentFiles, filePath)
+				break
+			}
+		}
+	}
+	return dependentFiles
+}
+
 func (w *Wire) GetQueriesForFile(filePath string) []QueryLocation {
 	if queries, exists := w.queries[filePath]; exists {
 		return queries

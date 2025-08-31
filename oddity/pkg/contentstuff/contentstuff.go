@@ -373,7 +373,7 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 			return fmt.Errorf("error converting to markdown: %v", err)
 		}
 
-		targetFile := filepath.Join(sc.ContentConfig.ContentDir, fd.FileName)
+		//targetFile := filepath.Join(sc.ContentConfig.ContentDir, fd.FileName)
 
 		err = sc.WriteContentFile(fd.FileName, content)
 		if err != nil {
@@ -392,14 +392,21 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 			return fmt.Errorf("error refreshing content: %v", err)
 		}
 
-		targetFileDir := filepath.Dir(targetFile)
-		indexPaths := []string{
-			filepath.Join(targetFileDir, "index.md"),
-			filepath.Join(targetFileDir, "index.html"),
+		//targetFileDir := filepath.Dir(targetFile)
+		//indexPaths := []string{
+		//	filepath.Join(targetFileDir, "index.md"),
+		//	filepath.Join(targetFileDir, "index.html"),
+		//}
+
+		err = wc.TriggerDependencyUpdates(fd.FileName)
+		if err != nil {
+			logrus.Errorf("error notifying file change for %s: %v", fd.FileName, err)
 		}
-		for _, ip := range indexPaths {
-			if _, err := os.Stat(ip); err == nil {
-				relativeIP, err := filepath.Rel(sc.ContentConfig.ContentDir, ip)
+
+		for _, ip := range wc.FindDependencies(fd.FileName) {
+			targetFile := filepath.Join(sc.ContentConfig.ContentDir, ip)
+			if _, err := os.Stat(targetFile); err == nil {
+				relativeIP, err := filepath.Rel(sc.ContentConfig.ContentDir, targetFile)
 				if err != nil {
 					logrus.Errorf("error getting relative path for %s: %v", ip, err)
 					continue
@@ -412,14 +419,14 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 				if err != nil {
 					logrus.Errorf("error scanning content file for queries %s: %v", ip, err)
 				}
-				err = wc.NotifyFileChanged(relativeIP)
-				if err != nil {
-					logrus.Errorf("error notifying file change for %s: %v", ip, err)
-				}
-				err = sc.RefreshContent(relativeIP)
-				if err != nil {
-					logrus.Errorf("error refreshing content for %s: %v", ip, err)
-				}
+				//err = wc.TriggerDependencyUpdates(relativeIP)
+				//if err != nil {
+				//	logrus.Errorf("error notifying file change for %s: %v", ip, err)
+				//}
+				//err = sc.RefreshContent(relativeIP)
+				//if err != nil {
+				//	logrus.Errorf("error refreshing content for %s: %v", ip, err)
+				//}
 			}
 		}
 
