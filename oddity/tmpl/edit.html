@@ -957,19 +957,37 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     if (!clipboardItems) return;
 
                     const imageFiles = [];
-                    
+
+                    const MIME_TO_EXT = {
+                        'image/png': 'png',
+                        'image/jpeg': 'jpg',
+                        'image/gif': 'gif',
+                        'image/webp': 'webp',
+                        'image/heic': 'heic',
+                        'image/heif': 'heif'
+                    };
+
+                    function guessExtension(mime, fallback = 'png') {
+                      if (!mime) return fallback;
+                      const type = String(mime).toLowerCase().split(';', 1)[0].trim();
+                      const direct = MIME_TO_EXT[type];
+                      if (direct !== undefined) return direct;
+                      if (type.includes('heic')) return 'heic';
+                      if (type.includes('heif')) return 'heif';
+                      return fallback;
+                    }
+
                     // Check each clipboard item for images
                     for (let i = 0; i < clipboardItems.length; i++) {
                         const item = clipboardItems[i];
                         if (item.type.startsWith('image/')) {
                             const file = item.getAsFile();
+                            console.log('Pasted image file:', file);
                             if (file) {
                                 // Generate unique filename with timestamp
                                 const timestamp = Date.now();
-                                const extension = item.type === 'image/png' ? 'png' : 
-                                                 item.type === 'image/jpeg' ? 'jpg' :
-                                                 item.type === 'image/gif' ? 'gif' :
-                                                 item.type === 'image/webp' ? 'webp' : 'png';
+                                const extension = guessExtension(file.type, 'png');
+                                console.log('Guessed extension:', extension);
                                 const filename = `pasted-image-${timestamp}.${extension}`;
                                 
                                 // Create a new File object with our custom name
