@@ -434,6 +434,10 @@
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-green-600 hover:text-white hover:bg-green-600 transition-all">
                         💾
                     </button>
+                    <button @click="triggerFileInput" 
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-blue-600 hover:text-white hover:bg-blue-600 transition-all lg:hidden">
+                        📷
+                    </button>
                 </div>
             </div>
         </div>
@@ -860,12 +864,12 @@
                             // Default Enter behavior for non-list lines
                             return CodeMirror.Pass;
                         },
-                        'Ctrl-S': function(cm) {
-                            app.saveContent();
-                        },
-                        'Cmd-S': function(cm) {
-                            app.saveContent();
-                        }
+                        // 'Ctrl-S': function(cm) {
+                        //     app.saveContent();
+                        // },
+                        // 'Cmd-S': function(cm) {
+                        //     app.saveContent();
+                        // }
                     }
                 });
                 codemirrorEditor.setValue(defaultLoadedData.content || '');
@@ -890,14 +894,14 @@
             }
 
             // Add Cmd+S / Ctrl+S keyboard shortcut for save
-            // document.addEventListener('keydown', function(e) {
-            //     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-            //         e.preventDefault(); // Prevent browser save dialog
-            //         if (app && app.saveContent) {
-            //             app.saveContent();
-            //         }
-            //     }
-            // });
+            document.addEventListener('keydown', function(e) {
+                if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                    e.preventDefault(); // Prevent browser save dialog
+                    if (app && app.saveContent) {
+                        app.saveContent();
+                    }
+                }
+            });
 
         });
 
