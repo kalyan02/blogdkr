@@ -29,14 +29,31 @@ type FrontmatterData struct {
 
 func (fm *FrontmatterData) SetRaw(data []byte) error {
 	fm.Raw = string(data)
+	var err error
 	switch fm.Type {
 	case FrontmatterYAML:
-		return yaml.Unmarshal(data, &fm.Data)
+		err = yaml.Unmarshal(data, &fm.Data)
 	case FrontmatterTOML:
-		return toml.Unmarshal(data, &fm.Data)
+		err = toml.Unmarshal(data, &fm.Data)
 	default:
 		return nil
 	}
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal frontmatter: %w", err)
+	}
+
+	// populate DataKV for easy access
+	if fm.DataKV == nil {
+		fm.DataKV = make(map[string]interface{})
+	}
+	for _, item := range fm.Data {
+		keyString, ok := item.Key.(string)
+		if !ok {
+			continue
+		}
+		fm.DataKV[keyString] = item.Value
+	}
+	return nil
 }
 
 // GetString safely gets a string value from frontmatter data
@@ -144,7 +161,7 @@ func (fm *FrontmatterData) Marshal() (string, error) {
 		}
 
 		if val, ok := fm.DataKV[keyString]; ok {
-			fm.Data[i].Value = val
+			item.Value = val
 			updatedKeys[keyString] = true
 		} else {
 			// remove key from Data if not in DataKV

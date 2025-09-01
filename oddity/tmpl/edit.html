@@ -9,13 +9,25 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/overtype/dist/overtype.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css"
+          integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"/>
+{{/*    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/base16-light.min.css"*/}}
+{{/*          integrity="sha512-UCcyAfcA/pJ4lD8YMo+fhwFdJeGNN5QrBlHvTQ1BopVjHWh35HD2JRV3tbwxtabH5ymri426oTfa1UF9Z63B3g=="*/}}
+{{/*          crossorigin="anonymous" referrerpolicy="no-referrer"/>*/}}
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/duotone-light.min.css" integrity="sha512-xf8h6rqzUr4ZJBR/GKic+RSPJUHjPF1cFe6kGi5vgrTbcqIaRd4VaeniV/d8oM7ln5tSIV7KrQ5DxdeYO6zeCg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"
+            integrity="sha512-8RnEqURPUc5aqFEN04aQEiPlSAdE0jlFS/9iGgUyNtwFnSKCXhmB6ZTNl7LnDtDWKabJIASzXrzD0K+LYexU9g=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        'mono': ['JetBrains Mono', 'monospace'],
+                        'mono': ['SF Mono', 'JetBrains Mono', 'monospace'],
                     },
                     animation: {
                         'pulse-once': 'pulse-once 1.5s ease-in-out'
@@ -104,6 +116,271 @@
         .sidebar-fade:hover {
             opacity: 1;
         }
+
+        #codemirrorEditor {
+            /*font-family: 'JetBrains Mono', monospace;*/
+            font-family: "SF Mono", SFMono-Regular, 'JetBrains Mono', Menlo, Monaco, "Cascadia Code", Consolas, "Roboto Mono", "Noto Sans Mono", "Droid Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Liberation Mono", "Courier New", Courier, monospace !important;
+            /*font-size: 14px;*/
+            /*line-height: 1.5;*/
+            height: auto;
+        }
+        .CodeMirror pre.CodeMirror-line {
+            font-family: "SF Mono", SFMono-Regular, Menlo, Monaco, "Cascadia Code", Consolas, "Roboto Mono", "Noto Sans Mono", "Droid Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Liberation Mono", "Courier New", Courier, monospace;
+        }
+        .CodeMirror {
+          /*border: 1px solid #eee;*/
+          height: auto;
+            font-size: 14px;
+        }
+
+        .cm-content, .cm-gutter { min-height: 600px; }
+        .cm-gutters { margin: 1px; }
+        .cm-scroller { overflow: auto; }
+        .cm-wrap { border: 1px solid silver }
+        .CodeMirror-linenumber { background: rgba(247, 247, 247, 0.47); color: #e2e2e2; padding: 0 8px; border-right: 0; }
+        .cm-editor {
+                  /*font-family: "SF Mono", SFMono-Regular, Menlo, Monaco, "Cascadia Code", Consolas, "Roboto Mono", "Noto Sans Mono", "Droid Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Liberation Mono", "Courier New", Courier, monospace !important;*/
+        }
+
+    </style>
+        <style>
+        /* Scoped Overtype-inspired styling - no global pollution */
+        .overtype-editor-app {
+            /* Solar theme colors (Overtype's default) - scoped to this component */
+            --oe-bg-primary: #ffffff;
+            --oe-bg-secondary: #ffffff;
+            --oe-text: #0d3b66;
+            --oe-text-secondary: #5a7a9b;
+            --oe-h1: #f95738;
+            --oe-h2: #ee964b;
+            --oe-h3: #3d8a51;
+            --oe-strong: #ee964b;
+            --oe-em: #f95738;
+            --oe-link: #0d3b66;
+            --oe-code: #0d3b66;
+            --oe-code-bg: rgba(244, 211, 94, 0.4);
+            --oe-syntax-marker: rgba(13, 59, 102, 0.52);
+            --oe-cursor: #f95738;
+            --oe-selection: rgba(244, 211, 94, 0.4);
+            --oe-border: rgba(13, 59, 102, 0.15);
+
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 1200px;
+            padding: 5px 0px;
+            background: var(--oe-bg-primary);
+            color: var(--oe-text);
+            line-height: 1.6;
+        }
+
+        .overtype-editor-app .editor-container {
+            border: 1px solid var(--oe-border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--oe-bg-secondary);
+            box-shadow: 0 2px 8px rgba(13, 59, 102, 0.1);
+        }
+
+        /* Overtype's monospace font stack - scoped */
+        .overtype-editor-app .CodeMirror {
+            height: auto;
+            font-family: "SF Mono", SFMono-Regular, Menlo, Monaco, "Cascadia Code", Consolas, "Roboto Mono", "Noto Sans Mono", "Droid Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Liberation Mono", "Courier New", Courier, monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            font-variant-ligatures: none;
+            font-kerning: none;
+            background: var(--oe-bg-secondary) !important;
+            color: var(--oe-text) !important;
+            border: none;
+            /*min-height: 600px;*/
+        }
+
+        .overtype-editor-app .CodeMirror-scroll {
+            min-height: 600px;
+        }
+
+        /* CodeMirror cursor styling - scoped */
+        .overtype-editor-app .CodeMirror-cursor {
+            border-left: 2px solid var(--oe-cursor) !important;
+        }
+
+        /* CodeMirror selection styling - scoped */
+        .overtype-editor-app .CodeMirror-selected {
+            background: var(--oe-selection) !important;
+        }
+
+        /* Overtype-inspired syntax highlighting - scoped */
+        .overtype-editor-app .cm-header-1 {
+            color: var(--oe-h1) !important;
+            font-weight: bold !important;
+        }
+        .overtype-editor-app .cm-header-2 {
+            color: var(--oe-h2) !important;
+            font-weight: bold !important;
+        }
+        .overtype-editor-app .cm-header-3 {
+            color: var(--oe-h3) !important;
+            font-weight: bold !important;
+        }
+
+        .overtype-editor-app .cm-strong {
+            color: var(--oe-strong) !important;
+            font-weight: bold !important;
+        }
+
+        .overtype-editor-app .cm-em {
+            color: var(--oe-em) !important;
+            font-style: italic !important;
+        }
+
+        .overtype-editor-app .cm-link {
+            color: var(--oe-link) !important;
+            text-decoration: underline !important;
+        }
+
+        .overtype-editor-app .cm-url {
+            color: var(--oe-text-secondary) !important;
+            opacity: 0.7;
+        }
+
+        .overtype-editor-app .cm-comment {
+            color: var(--oe-code) !important;
+            background: var(--oe-code-bg) !important;
+            border-radius: 2px;
+            padding: 1px 2px;
+        }
+
+        /* Markdown syntax markers - scoped */
+        .overtype-editor-app .cm-formatting {
+            color: var(--oe-syntax-marker) !important;
+            opacity: 0.7 !important;
+        }
+
+        .overtype-editor-app .cm-quote {
+            color: var(--oe-text-secondary) !important;
+        }
+
+        .overtype-editor-app .cm-list {
+            color: var(--oe-strong) !important;
+        }
+
+        .overtype-editor-app .preview {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid var(--oe-border);
+            border-radius: 8px;
+            background-color: var(--oe-bg-secondary);
+            font-family: Georgia, 'Times New Roman', serif;
+            line-height: 1.8;
+            color: var(--oe-text);
+        }
+
+        .overtype-editor-app .preview h1,
+        .overtype-editor-app .preview h2,
+        .overtype-editor-app .preview h3 {
+            font-weight: 600;
+            margin: 1em 0 0.5em 0;
+        }
+
+        .overtype-editor-app .preview h1 { color: var(--oe-h1); font-size: 2em; }
+        .overtype-editor-app .preview h2 { color: var(--oe-h2); font-size: 1.5em; }
+        .overtype-editor-app .preview h3 { color: var(--oe-h3); font-size: 1.17em; }
+
+        .overtype-editor-app .preview strong { color: var(--oe-strong); }
+        .overtype-editor-app .preview em { color: var(--oe-em); }
+        .overtype-editor-app .preview a { color: var(--oe-link); }
+
+        .overtype-editor-app .preview code {
+            background: var(--oe-code-bg);
+            color: var(--oe-code);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.9em;
+        }
+
+        .overtype-editor-app .preview pre {
+            background: var(--oe-code-bg);
+            padding: 1em;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+
+        .overtype-editor-app .preview blockquote {
+            border-left: 4px solid var(--oe-text-secondary);
+            padding-left: 1em;
+            margin-left: 0;
+            color: var(--oe-text-secondary);
+            font-style: italic;
+        }
+
+        .overtype-editor-app .controls {
+            margin-bottom: 20px;
+        }
+
+        .overtype-editor-app button {
+            margin-right: 10px;
+            padding: 10px 16px;
+            border: 1px solid var(--oe-border);
+            background-color: var(--oe-bg-secondary);
+            color: var(--oe-text);
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .overtype-editor-app button:hover {
+            background-color: var(--oe-bg-primary);
+            border-color: var(--oe-strong);
+            color: var(--oe-strong);
+        }
+
+        .overtype-editor-app button:active {
+            transform: translateY(1px);
+        }
+
+        .overtype-editor-app .character-count {
+            font-family: "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.85rem;
+            color: var(--oe-text-secondary);
+        }
+
+        /* Enhanced light theme styling - scoped */
+        .overtype-editor-app h1,
+        .overtype-editor-app h2,
+        .overtype-editor-app h3 {
+            color: var(--oe-text);
+            font-weight: 600;
+            margin: 1.5em 0 0.5em 0;
+        }
+
+        .overtype-editor-app h1 {
+            color: var(--oe-h1);
+            font-size: 2.25em;
+            border-bottom: 2px solid var(--oe-border);
+            padding-bottom: 0.3em;
+        }
+
+        .overtype-editor-app h2 {
+            color: var(--oe-h2);
+            font-size: 1.75em;
+        }
+
+        .overtype-editor-app h3 {
+            color: var(--oe-h3);
+            font-size: 1.25em;
+        }
+
+        /* Beautiful focus states - scoped */
+        .overtype-editor-app .CodeMirror-focused {
+            /*box-shadow: 0 0 0 2px var(--oe-selection);*/
+        }
+
+        .overtype-editor-app button:focus {
+            outline: 2px solid var(--oe-cursor);
+            outline-offset: 2px;
+        }
     </style>
 </head>
 <body class="font-mono bg-white min-h-screen">
@@ -178,7 +455,21 @@
                     'border-orange-300': !distractionFree && isPrivate,
                     'border-orange-100': distractionFree && isPrivate,
                 }">
-                <div id="richeditor" class="w-full richeditor"></div>
+                <!--div id="richeditor" class="w-full richeditor"></div-->
+                <div id="richeditor2" class="w-full richeditor2 tracking-normal overtype-editor-app">
+                    <textarea
+                        id="codemirrorEditor"
+                        v-model="content"
+                        ref="codemirrorEditor"
+                        @input="autoResize"
+                        class="w-full overtype-editor-app min-h-[600px] lg:min-h-[60vh] border-none p-4 text-sm lg:text-sm text-base leading-relaxed resize-none outline-none bg-transparent font-mono tracking-normal"
+                        :class="{ 'bg-gray-50 focus:bg-white': !distractionFree }"
+                        :placeholder="editorPlaceholder"
+                        spellcheck="true"
+                    ></textarea>
+
+                </textarea>
+                </div>
 
             </div>
 
@@ -402,6 +693,7 @@
 
 
         var overtypeEditor = null;
+        var codemirrorEditor = null;
         // document on load
         document.addEventListener("DOMContentLoaded", function() {
             // Create a single editor
@@ -413,6 +705,8 @@
                     theme: "light",
                     autoResize: true,
                     fontSize: '14px',
+                    smartLists: false,
+                    tabSize: 4,
                     minHeight: CONFIG.EDITOR_MIN_HEIGHT + 'px',
                     onChange: (value) => {
                         app.content = value;
@@ -424,19 +718,131 @@
                 });
 
                 for (var i = 0; i < overtypeEditor.length; i++) {
-                    overtypeEditor[i].textarea.setAttribute('autocomplete', 'on');
-                    overtypeEditor[i].textarea.setAttribute('autocorrect', 'on');
-                    overtypeEditor[i].textarea.setAttribute('autocapitalize', 'on');
-                    overtypeEditor[i].textarea.setAttribute('spellcheck', 'true');
-                    overtypeEditor[i].textarea.setAttribute('data-gramm', 'true');
-                    overtypeEditor[i].textarea.setAttribute('data-gramm_editor', 'true');
-                    overtypeEditor[i].textarea.setAttribute('data-enable-grammarly', 'true');
+                    // overtypeEditor[i].textarea.setAttribute('autocomplete', 'on');
+                    // overtypeEditor[i].textarea.setAttribute('autocorrect', 'on');
+                    // overtypeEditor[i].textarea.setAttribute('autocapitalize', 'on');
+                    // overtypeEditor[i].textarea.setAttribute('spellcheck', 'true');
+                    // overtypeEditor[i].textarea.setAttribute('data-gramm', 'true');
+                    // overtypeEditor[i].textarea.setAttribute('data-gramm_editor', 'true');
+                    // overtypeEditor[i].textarea.setAttribute('data-enable-grammarly', 'true');
                     
                     // Add paste event listener for image paste
                     overtypeEditor[i].textarea.addEventListener('paste', function(e) {
                         app.handlePaste(e);
                     });
                 }
+
+            }
+
+            // setup codemirror if it exists
+            if(document.getElementById("codemirrorEditor")) {
+                codemirrorEditor = CodeMirror.fromTextArea(document.getElementById("codemirrorEditor"), {
+                    mode: 'markdown',
+                    lineNumbers: false,
+                    lineWrapping: true,
+                    theme: 'default',
+                    tabSize: 4,
+                    indentUnit: 4,
+                    spellcheck: true,
+                    autocorrect: true,
+                    autocapitalize: true,
+                    viewportMargin: Infinity,
+                    scrollBarStyle: 'native',
+                    // auto expand
+
+                    extraKeys: {
+                        'Tab': function(cm) {
+                            if (cm.somethingSelected()) {
+                                cm.indentSelection("add");
+                            } else {
+                                cm.replaceSelection("    ", "end");
+                            }
+                        },
+                        'Shift-Tab': function(cm) {
+                            if (cm.somethingSelected()) {
+                                cm.indentSelection("subtract");
+                            } else {
+                                var cursor = cm.getCursor();
+                                var line = cm.getLine(cursor.line);
+
+                                // Check if this is a list line
+                                var listMatch = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+                                if (listMatch) {
+                                    var [, indent, marker, content] = listMatch;
+                                    var currentIndent = indent.length;
+                                    var newIndent = Math.max(0, currentIndent - 4);
+                                    var newLine = " ".repeat(newIndent) + marker + ' ' + content;
+
+                                    var from = { line: cursor.line, ch: 0 };
+                                    var to = { line: cursor.line, ch: line.length };
+                                    cm.replaceRange(newLine, from, to);
+
+                                    // Maintain cursor position relative to content
+                                    var newCursorPos = newIndent + marker.length + 1 + (cursor.ch - (currentIndent + marker.length + 1));
+                                    cm.setCursor(cursor.line, Math.max(newIndent + marker.length + 1, newCursorPos));
+                                } else {
+                                    // Non-list line - use your original logic
+                                    var from = { line: cursor.line, ch: 0 };
+                                    var to = { line: cursor.line, ch: line.length };
+                                    var currentIndent = line.match(/^\s*/)[0].length;
+                                    var newIndent = Math.max(0, currentIndent - 4);
+                                    cm.replaceRange(" ".repeat(newIndent) + line.substring(currentIndent), from, to);
+                                }
+                            }
+                        },
+                        'Enter': function(cm) {
+                            const cursor = cm.getCursor();
+                            const line = cm.getLine(cursor.line);
+
+                            // Check for bullet list patterns
+                            const bulletMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+                            const numberedMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+
+                            if (bulletMatch) {
+                                const [, indent, bullet, content] = bulletMatch;
+                                if (content.trim() === '') {
+                                    // Empty list item - exit list
+                                    cm.replaceRange('', {line: cursor.line, ch: 0}, {line: cursor.line, ch: line.length});
+                                } else {
+                                    // Create new list item at same level
+                                    cm.replaceSelection('\n' + indent + bullet + ' ');
+                                }
+                                return;
+                            }
+
+                            if (numberedMatch) {
+                                const [, indent, num, content] = numberedMatch;
+                                if (content.trim() === '') {
+                                    // Empty numbered item - exit list
+                                    cm.replaceRange('', {line: cursor.line, ch: 0}, {line: cursor.line, ch: line.length});
+                                } else {
+                                    // Create new numbered item (increment number)
+                                    const nextNum = parseInt(num) + 1;
+                                    cm.replaceSelection('\n' + indent + nextNum + '. ');
+                                }
+                                return;
+                            }
+
+                            // Default Enter behavior for non-list lines
+                            return CodeMirror.Pass;
+                        },
+                        'Ctrl-S': function(cm) {
+                            app.saveContent();
+                        },
+                        'Cmd-S': function(cm) {
+                            app.saveContent();
+                        }
+                    }
+                });
+                codemirrorEditor.setValue(defaultLoadedData.content || '');
+                codemirrorEditor.on('change', function(cm) {
+                    app.content = cm.getValue();
+                });
+
+                // Add paste event listener for image paste
+                codemirrorEditor.getInputField().addEventListener('paste', function(e) {
+                    app.handlePaste(e);
+                });
 
             }
 
@@ -486,7 +892,7 @@
                     currentFile: defaultLoadedData.currentFile || 'untitled.md',
                     isPrivate: defaultLoadedData.isPrivate || false,
                     lastSaved: null,
-                    distractionFree: false,
+                    distractionFree: false, // it bugs out if you set it true. so don't.
                     sidebarVisible: true,
                     isDragOver: false,
                     uploading: false,
@@ -913,40 +1319,73 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     this.insertAtCursor(link)
                 },
                 insertAtCursor(text) {
-                    const textarea = document.getElementsByClassName("overtype-input")[0];
-                    const start = textarea.selectionStart
-                    const end = textarea.selectionEnd
-                    
-                    textarea.value = this.content.substring(0, start) + text + this.content.substring(end)
-                    this.$nextTick(() => {
-                        textarea.focus()
-                        textarea.setSelectionRange(start + text.length, start + text.length)
-                    })
+                    // const textarea = document.getElementsByClassName("overtype-input")[0];
+                    // const start = textarea.selectionStart
+                    // const end = textarea.selectionEnd
+                    //
+                    // textarea.value = this.content.substring(0, start) + text + this.content.substring(end)
+                    // this.$nextTick(() => {
+                    //     textarea.focus()
+                    //     textarea.setSelectionRange(start + text.length, start + text.length)
+                    // })
+                    const cursor = codemirrorEditor.getCursor();
+
+                    // Insert text at cursor position
+                    codemirrorEditor.replaceRange(text, cursor);
+
+                    // Focus the editor
+                    codemirrorEditor.focus();
                 },
+
+
                 insertAtCursorWithNewlines(text) {
-                    const textarea = document.getElementsByClassName("overtype-input")[0];
-                    const start = textarea.selectionStart
-                    const end = textarea.selectionEnd
-                    
-                    // Check if we need leading newline (not at start of line)
-                    const beforeCursor = this.content.substring(0, start);
-                    const needsLeadingNewline = beforeCursor.length > 0 && !beforeCursor.endsWith('\n');
-                    
-                    // Check if we need trailing newline (not followed by newline)
-                    const afterCursor = this.content.substring(end);
-                    const needsTrailingNewline = afterCursor.length > 0 && !afterCursor.startsWith('\n');
-                    
-                    // Build the text to insert with appropriate newlines
-                    let textToInsert = '';
-                    if (needsLeadingNewline) textToInsert += '\n';
-                    textToInsert += text;
-                    if (needsTrailingNewline) textToInsert += '\n';
-                    
-                    textarea.value = this.content.substring(0, start) + textToInsert + this.content.substring(end)
-                    this.$nextTick(() => {
-                        textarea.focus()
-                        textarea.setSelectionRange(start + textToInsert.length, start + textToInsert.length)
-                    })
+                    // const textarea = document.getElementsByClassName("overtype-input")[0];
+                    // const start = textarea.selectionStart
+                    // const end = textarea.selectionEnd
+                    //
+                    // // Check if we need leading newline (not at start of line)
+                    // const beforeCursor = this.content.substring(0, start);
+                    // const needsLeadingNewline = beforeCursor.length > 0 && !beforeCursor.endsWith('\n');
+                    //
+                    // // Check if we need trailing newline (not followed by newline)
+                    // const afterCursor = this.content.substring(end);
+                    // const needsTrailingNewline = afterCursor.length > 0 && !afterCursor.startsWith('\n');
+                    //
+                    // // Build the text to insert with appropriate newlines
+                    // let textToInsert = '';
+                    // if (needsLeadingNewline) textToInsert += '\n';
+                    // textToInsert += text;
+                    // if (needsTrailingNewline) textToInsert += '\n';
+                    //
+                    // textarea.value = this.content.substring(0, start) + textToInsert + this.content.substring(end)
+                    // this.$nextTick(() => {
+                    //     textarea.focus()
+                    //     textarea.setSelectionRange(start + textToInsert.length, start + textToInsert.length)
+                    // })
+
+                        const cursor = codemirrorEditor.getCursor();
+                        const lineContent = codemirrorEditor.getLine(cursor.line);
+
+                        // Check if we need leading newline (not at start of line)
+                        const needsLeadingNewline = cursor.ch > 0 && lineContent.trim().length > 0;
+
+                        // Check if we need trailing newline (not followed by newline)
+                        const totalLines = codemirrorEditor.lineCount();
+                        const isLastLine = cursor.line === totalLines - 1;
+                        const nextLineEmpty = !isLastLine && codemirrorEditor.getLine(cursor.line + 1).trim() === '';
+                        const needsTrailingNewline = !isLastLine && !nextLineEmpty;
+
+                        // Build the text to insert with appropriate newlines
+                        let textToInsert = '';
+                        if (needsLeadingNewline) textToInsert += '\n';
+                        textToInsert += text;
+                        if (needsTrailingNewline) textToInsert += '\n';
+
+                        // Insert text at cursor position
+                        codemirrorEditor.replaceRange(textToInsert, cursor);
+
+                        // Focus and set cursor position after inserted text
+                        codemirrorEditor.focus();
                 },
                 insertImageWithNewlines(filename, uploadedPath) {
                     const markdown = `![${filename}](${uploadedPath})`;
