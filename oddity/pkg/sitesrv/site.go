@@ -34,7 +34,7 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 
 	// check if it is a static file is that's requested
 	if IsStaticFile(requestPath) {
-		for _, staticDir := range s.SiteContent.Config.Content.StaticDirs {
+		for _, staticDir := range s.SiteContent.Config().Content.StaticDirs {
 			staticFilePath := filepath.Join(staticDir, requestPath)
 			if _, err := os.Stat(staticFilePath); err == nil {
 				c.File(staticFilePath)
@@ -234,14 +234,14 @@ func (s *SiteApp) createNewPostSlugHint(path *contentstuff.Page) string {
 func (s *SiteApp) createNewPostSlugHintFromPath(currSlug string) string {
 	slugDir := filepath.Dir(currSlug)
 	if slugDir == "." {
-		slugDir = s.SiteContent.Config.GetSiteConfig(true).DefaultNewHint
+		slugDir = s.SiteContent.Config().GetSiteConfig(true).DefaultNewHint
 	}
 
 	today := time.Now().Format("2006-01-02")
 	hintSlug := filepath.Join(slugDir, today)
 	i := 1
 	for {
-		if _, ok := s.SiteContent.SlugFileMap[hintSlug]; !ok {
+		if _, ok := s.SiteContent.DoPath(hintSlug); !ok {
 			break
 		}
 		i++

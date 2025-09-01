@@ -46,6 +46,7 @@ func (s *AdminApp) RegisterRoutes(r *gin.Engine) {
 	adminGroup.GET("/uploads-list", s.HandleUploadsList)
 	adminGroup.POST("/upload-delete", s.HandleFileDelete)
 	adminGroup.POST("/upload-rename", s.HandleFileRename)
+	adminGroup.POST("/rename", s.HandleRename)
 }
 
 type FileInfo struct {
@@ -75,7 +76,7 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 		reqData.FullSlug = strings.Trim(reqData.FullSlug, "/")
 
 		targetFile := reqData.CurrentFile
-		file, existingPage := s.SiteContent.FileName[targetFile]
+		file, existingPage := s.SiteContent.DoPath(targetFile)
 
 		parser := contentstuff.NewMarkdownParser(contentstuff.DefaultParserConfig())
 		editedFile, err := parser.Parse([]byte(reqData.Content))
@@ -127,7 +128,7 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 			originalSlug := slug
 			i := 1
 			for {
-				if _, exists := s.SiteContent.SlugFileMap[slug]; !exists {
+				if _, exists := s.SiteContent.DoPath(slug); !exists {
 					break
 				}
 				slug = fmt.Sprintf("%s-%d", originalSlug, i)
@@ -434,7 +435,7 @@ func buildMaybeTitle(newPath string) string {
 }
 
 func (s *AdminApp) createNewPostSlugHint(path *contentstuff.Page) string {
-	sc := s.SiteContent.Config.GetSiteConfig(true)
+	sc := s.SiteContent.Config().GetSiteConfig(true)
 	var slugDir string
 	if path == nil {
 		slugDir = sc.DefaultNewHint
@@ -452,7 +453,7 @@ func (s *AdminApp) createNewPostSlugHint(path *contentstuff.Page) string {
 	hintSlug := filepath.Join(slugDir, today)
 	i := 1
 	for {
-		if _, ok := s.SiteContent.SlugFileMap[hintSlug]; !ok {
+		if _, ok := s.SiteContent.DoPath(hintSlug); !ok {
 			break
 		}
 		i++
@@ -548,8 +549,8 @@ func (s *AdminApp) HandleFileRename(c *gin.Context) {
 		return
 	}
 
-	oldFilePath := filepath.Join(s.SiteContent.Config.Content.UploadDir, req.FullSlug, req.OldFilename)
-	newFilePath := filepath.Join(s.SiteContent.Config.Content.UploadDir, req.FullSlug, req.NewFilename)
+	oldFilePath := filepath.Join(s.SiteContent.Config().Content.UploadDir, req.FullSlug, req.OldFilename)
+	newFilePath := filepath.Join(s.SiteContent.Config().Content.UploadDir, req.FullSlug, req.NewFilename)
 
 	// Check if old file exists
 	if _, err := os.Stat(oldFilePath); os.IsNotExist(err) {

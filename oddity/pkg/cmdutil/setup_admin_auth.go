@@ -75,7 +75,7 @@ func RunAdminAuthSetup(configPath string) {
 
 	// Check if user already exists
 	var existingUser authz.User
-	err = siteContent.DBHandle.Where("username = ?", username).First(&existingUser).Error
+	err = siteContent.DB().Where("username = ?", username).First(&existingUser).Error
 
 	if err == nil {
 		// User exists, update password
@@ -98,7 +98,7 @@ func RunAdminAuthSetup(configPath string) {
 			Role:         "admin",
 		}
 
-		err = siteContent.DBHandle.Create(&user).Error
+		err = siteContent.DB().Create(&user).Error
 		if err != nil {
 			logrus.Fatalf("Failed to create admin user: %v", err)
 		}

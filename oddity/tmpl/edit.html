@@ -660,6 +660,40 @@
                     </div>
                 </div>
 
+                <!-- Options Section -->
+                <div class="mb-6">
+                    <h3 @click="toggleSection('options')" 
+                        class="text-xs uppercase text-gray-600 font-semibold mb-3 cursor-pointer flex items-center justify-between hover:text-gray-900">
+                        Options
+                        <span class="text-xs transition-transform" :class="{ 'rotate-180': !sections.options }">▼</span>
+                    </h3>
+                    <div v-show="sections.options">
+                        <!-- Rename Post Section -->
+                        <div class="mb-4">
+                            <label class="text-xs text-gray-600 font-medium mb-2 block">Rename Post Path:</label>
+                            <div class="flex flex-col lg:flex-row gap-2">
+                                <input 
+                                    v-model="newSlug" 
+                                    type="text" 
+                                    :placeholder="currentSlug"
+                                    class="flex-1 text-xs border border-gray-300 rounded px-2 py-1 bg-gray-50 focus:border-blue-500 focus:bg-white outline-none font-mono"
+                                    :disabled="renaming"
+                                />
+                                <button 
+                                    @click="renamePost" 
+                                    :disabled="renaming || !newSlug || newSlug === currentSlug"
+                                    class="px-3 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap">
+                                    <span v-if="renaming">Renaming...</span>
+                                    <span v-else>Rename</span>
+                                </button>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">Current: [[ currentSlug ]]</div>
+                            <div v-if="renameError" class="text-xs text-red-500 mt-1">[[ renameError ]]</div>
+                            <div v-if="renameSuccess" class="text-xs text-green-600 mt-1">Post renamed successfully!</div>
+                        </div>
+                    </div>
+                </div>
+
 
             </div>
         </div>
@@ -905,7 +939,8 @@
                         frontmatter: true,
                         fileupload: true,
                         search: true,
-                        history: false
+                        history: false,
+                        options: false
                     },
                     navLinks: [
                         ...buildBreadCrumbNav()
@@ -946,7 +981,12 @@
                     },
                     history: [],
                     historyLoading: false,
-                    historyError: null
+                    historyError: null,
+                    currentSlug: defaultLoadedData.fullSlug || '',
+                    newSlug: defaultLoadedData.fullSlug || '',
+                    renaming: false,
+                    renameError: null,
+                    renameSuccess: false
                 }
             },
             computed: {
@@ -1562,6 +1602,62 @@ Start writing your content here. The editor is now centered with a fixed maximum
                             }
                         }
                     }
+                },
+                async renamePost() {
+                    if (!this.newSlug || this.newSlug === this.currentSlug || this.renaming) {
+                        return;
+                    }
+
+                    // Show confirmation dialog
+                    const confirmed = confirm(
+                        `Are you sure you want to rename this post from "${this.currentSlug}" to "${this.newSlug}"?\n\n` +
+                        `This will move the file and all associated uploads. This action cannot be undone.`
+                    );
+                    
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    this.renaming = true;
+                    this.renameError = null;
+                    this.renameSuccess = false;
+
+                    try {
+                        // Step 1: Save current content first to prevent data loss
+                        console.log('Saving content before rename...');
+                        await this.saveContent();
+
+                        // Step 2: Perform rename operation
+                        console.log('Performing rename operation...');
+                        const response = await fetch('/admin/rename', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                oldSlug: this.currentSlug,
+                                newSlug: this.newSlug.trim()
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                        }
+
+                        console.log('Rename successful, redirecting to new page...');
+
+                        // Step 3: Redirect to new edit page for clean state
+                        const newUrl = `/admin/edit?path=${encodeURIComponent(this.newSlug.trim())}`;
+                        window.location.href = newUrl;
+
+                    } catch (error) {
+                        console.error('Error renaming post:', error);
+                        this.renameError = error.message;
+                        this.renaming = false;
+                    }
+                    // Note: don't set renaming = false here since we're redirecting
                 }
             },
             mounted() {

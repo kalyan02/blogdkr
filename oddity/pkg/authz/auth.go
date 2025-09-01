@@ -49,14 +49,14 @@ func (a *AuthzApp) RegisterRoutes(r *gin.Engine) {
 }
 
 func (a *AuthzApp) Init() {
-	err := a.SiteContent.DBHandle.AutoMigrate(&User{}, &UserSession{})
+	err := a.SiteContent.DB().AutoMigrate(&User{}, &UserSession{})
 	if err != nil {
 		log.Fatalf("Failed to migrate authz models: %v", err)
 	}
 
 	// Create default admin user if no users exist
 	var userCount int64
-	a.SiteContent.DBHandle.Model(&User{}).Count(&userCount)
+	a.SiteContent.DB().Model(&User{}).Count(&userCount)
 	if userCount == 0 {
 		err = a.CreateDefaultAdmin()
 		if err != nil {
@@ -101,13 +101,13 @@ func (a *AuthzApp) CreateDefaultAdmin() error {
 		Role:         "admin",
 	}
 
-	return a.SiteContent.DBHandle.Create(&user).Error
+	return a.SiteContent.DB().Create(&user).Error
 }
 
 // AuthenticateUser authenticates a user with username/password
 func (a *AuthzApp) AuthenticateUser(username, password string) (*User, error) {
 	var user User
-	err := a.SiteContent.DBHandle.Where("username = ?", username).First(&user).Error
+	err := a.SiteContent.DB().Where("username = ?", username).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (a *AuthzApp) CreateSession(userID uint) (*UserSession, error) {
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 
-	err = a.SiteContent.DBHandle.Create(&session).Error
+	err = a.SiteContent.DB().Create(&session).Error
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (a *AuthzApp) CreateSession(userID uint) (*UserSession, error) {
 // GetSessionByToken retrieves a session by token
 func (a *AuthzApp) GetSessionByToken(token string) (*UserSession, error) {
 	var session UserSession
-	err := a.SiteContent.DBHandle.Preload("User").Where("token = ? AND expires_at > ?", token, time.Now()).First(&session).Error
+	err := a.SiteContent.DB().Preload("User").Where("token = ? AND expires_at > ?", token, time.Now()).First(&session).Error
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (a *AuthzApp) GetSessionByToken(token string) (*UserSession, error) {
 
 // DeleteSession deletes a session by token
 func (a *AuthzApp) DeleteSession(token string) error {
-	return a.SiteContent.DBHandle.Where("token = ?", token).Delete(&UserSession{}).Error
+	return a.SiteContent.DB().Where("token = ?", token).Delete(&UserSession{}).Error
 }
 
 // ChangePassword changes a user's password
@@ -163,12 +163,12 @@ func (a *AuthzApp) ChangePassword(userID uint, newPassword string) error {
 		return err
 	}
 
-	return a.SiteContent.DBHandle.Model(&User{}).Where("id = ?", userID).Update("password_hash", hash).Error
+	return a.SiteContent.DB().Model(&User{}).Where("id = ?", userID).Update("password_hash", hash).Error
 }
 
 // CleanupExpiredSessions removes expired sessions
 func (a *AuthzApp) CleanupExpiredSessions() error {
-	return a.SiteContent.DBHandle.Where("expires_at < ?", time.Now()).Delete(&UserSession{}).Error
+	return a.SiteContent.DB().Where("expires_at < ?", time.Now()).Delete(&UserSession{}).Error
 }
 
 // Middleware
@@ -374,7 +374,7 @@ func (a *AuthzApp) SetSessionData(c *gin.Context, key string, value interface{})
 		return err
 	}
 
-	return a.SiteContent.DBHandle.Model(&UserSession{}).
+	return a.SiteContent.DB().Model(&UserSession{}).
 		Where("token = ?", sessionToken).
 		Update("custom_data", string(jsonData)).Error
 }
@@ -434,7 +434,7 @@ func (a *AuthzApp) DeleteSessionData(c *gin.Context, key string) error {
 		return err
 	}
 
-	return a.SiteContent.DBHandle.Model(&UserSession{}).
+	return a.SiteContent.DB().Model(&UserSession{}).
 		Where("token = ?", sessionToken).
 		Update("custom_data", string(jsonData)).Error
 }

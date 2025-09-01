@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -17,54 +18,175 @@ import (
 	"oddity/pkg/config"
 )
 
-type ContentStuff struct {
-	FileName    map[string]FileDetail
-	SlugFileMap map[string]FileDetail
-	Config      *config.Config
-	DBHandle    *gorm.DB
+type fileCMS struct {
+	fileNameMap map[string]FileDetail
+	slugFileMap map[string]FileDetail
+	ContentDir  string
 }
 
-func (c *ContentStuff) AllFiles() []FileDetail {
-	var fds []FileDetail
-	for _, fd := range c.FileName {
-		fds = append(fds, fd)
-	}
-	return fds
-}
-
-func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
-	if fd, ok := c.FileName[p]; ok {
+func (c *fileCMS) doPath(p string) (FileDetail, bool) {
+	if fd, ok := c.fileNameMap[p]; ok {
 		return fd, true
 	}
-	if fd, ok := c.SlugFileMap[p]; ok {
+	if fd, ok := c.slugFileMap[p]; ok {
 		return fd, true
 	}
 	return FileDetail{}, false
 }
 
+func (c *fileCMS) allFiles() []FileDetail {
+	var fds []FileDetail
+	for _, fd := range c.fileNameMap {
+		fds = append(fds, fd)
+	}
+	return fds
+}
+
+func (c *fileCMS) scanContent() error {
+	if c.fileNameMap == nil {
+		c.fileNameMap = make(map[string]FileDetail)
+	}
+	if c.slugFileMap == nil {
+		c.slugFileMap = make(map[string]FileDetail)
+	}
+	return filepath.Walk(c.ContentDir, c.scanContentPath)
+}
+
+func (c *fileCMS) scanContentPath(path string, info fs.FileInfo, err error) error {
+	if err != nil {
+		return err
+	}
+	relPath, err := filepath.Rel(c.ContentDir, path)
+	if err != nil {
+		return err
+	}
+
+	// if info is nil then os.Stat the path
+	if info == nil {
+		info, err = os.Stat(path)
+		if err != nil {
+			return err
+		}
+	}
+
+	//var ctime time.Time
+	//if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+	//	// convert to time.Time
+	//	ctime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
+	//}
+
+	if info.IsDir() {
+		c.fileNameMap[relPath] = FileDetail{
+			FileName:   relPath,
+			FileType:   FileTypeDirectory,
+			LoadedAt:   time.Now(),
+			ModifiedAt: info.ModTime(),
+			CreatedAt:  info.ModTime(),
+		}
+	}
+
+	if !info.IsDir() && (filepath.Ext(path) == ".md" || filepath.Ext(path) == ".html") {
+
+		// if it already exists and modtime is same then skip
+		if existing, ok := c.fileNameMap[relPath]; ok {
+			if existing.ModifiedAt.Equal(info.ModTime()) {
+				return nil
+			}
+		}
+
+		fileContent, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		mdParser := NewMarkdownParser(DefaultParserConfig())
+		pc, err := mdParser.Parse(fileContent)
+		if err != nil {
+			return err
+		}
+
+		fd := FileDetail{
+			FileName:      relPath,
+			ParsedContent: pc,
+			LoadedAt:      time.Now(),
+			ModifiedAt:    info.ModTime(),
+			FileType: func() FileType {
+				if filepath.Ext(path) == ".md" {
+					return FileTypeMarkdown
+				} else {
+					return FileTypeHTML
+				}
+			}(),
+			CreatedAt: info.ModTime(),
+		}
+		c.fileNameMap[relPath] = fd
+
+		// crreate at <dir>/<slug>
+		pg := NewPageFromFileDetail(&fd)
+		slugPath := pg.Slug()
+		if slugPath != "" {
+			c.slugFileMap[slugPath] = fd
+		}
+	}
+	return nil
+}
+
+type ContentStuff struct {
+	//FileName    map[string]FileDetail
+	//SlugFileMap map[string]FileDetail
+
+	cms    *fileCMS
+	cmsMux *sync.RWMutex
+
+	config   *config.Config
+	dbHandle *gorm.DB
+}
+
+func (c *ContentStuff) AllFiles() []FileDetail {
+	c.cmsMux.RLock()
+	defer c.cmsMux.RUnlock()
+	return c.cms.allFiles()
+}
+
+func (c *ContentStuff) DB() *gorm.DB {
+	return c.dbHandle
+}
+
+func (c *ContentStuff) Config() *config.Config {
+	return c.config
+}
+
+func (c *ContentStuff) DoPath(p string) (FileDetail, bool) {
+	c.cmsMux.RLock()
+	defer c.cmsMux.RUnlock()
+	return c.cms.doPath(p)
+}
+
 func NewContentStuff(config *config.Config) *ContentStuff {
 	return &ContentStuff{
-		Config:      config,
-		FileName:    make(map[string]FileDetail),
-		SlugFileMap: make(map[string]FileDetail),
+		config: config,
+		cms: &fileCMS{
+			ContentDir: config.Content.ContentDir,
+		},
+		cmsMux: &sync.RWMutex{},
 	}
 }
 
 func (c *ContentStuff) LoadContent() error {
 	// DB Connect
-	db, err := sqliteConnect(c.Config.Content.SidecarDB)
+	db, err := sqliteConnect(c.config.Content.SidecarDB)
 	if err != nil {
 		return fmt.Errorf("error connecting to sqlite db: %v", err)
 	}
-	c.DBHandle = db
+	c.dbHandle = db
 
-	err = c.DBHandle.AutoMigrate(&PostHistory{})
+	err = c.dbHandle.AutoMigrate(&PostHistory{})
 	if err != nil {
 		return fmt.Errorf("error migrating sqlite db: %v", err)
 	}
 
 	// traverse the directory c.Config.ContentDir
-	err = filepath.Walk(c.Config.Content.ContentDir, c.scanContentPath)
+	err = c.cms.scanContent()
 	if err != nil {
 		return fmt.Errorf("error walking content dir: %v", err)
 	}
@@ -77,10 +199,23 @@ func (c *ContentStuff) LoadContent() error {
 	return nil
 }
 
+func (c *ContentStuff) ReloadContent() error {
+	newCMS := &fileCMS{ContentDir: c.config.Content.ContentDir}
+	err := newCMS.scanContent()
+	if err != nil {
+		return fmt.Errorf("error walking content dir: %v", err)
+	}
+	c.cmsMux.Lock()
+	c.cms = newCMS
+	c.cmsMux.Unlock()
+	return nil
+
+}
+
 func (c *ContentStuff) initializeDBHistory() error {
 	// now load from db and create records there if not exists
 	var fds []PostHistory
-	result := c.DBHandle.Find(&fds)
+	result := c.dbHandle.Find(&fds)
 	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("error loading file details from db: %v", result.Error)
 	}
@@ -91,7 +226,7 @@ func (c *ContentStuff) initializeDBHistory() error {
 		existingSlugs[ph.FileName] = true
 		existingSlugs[ph.FullSlug] = true
 	}
-	for _, fd := range c.FileName {
+	for _, fd := range c.cms.allFiles() {
 		if fd.FileType == FileTypeDirectory {
 			continue
 		}
@@ -129,7 +264,7 @@ func (c *ContentStuff) initializeDBHistory() error {
 			HTML:     string(fd.ParsedContent.HTML),
 			Content:  rawContent,
 		}
-		if err := c.DBHandle.Create(&ph).Error; err != nil {
+		if err := c.dbHandle.Create(&ph).Error; err != nil {
 			logrus.Errorf("error creating post history for %s: %v", ph.FullSlug, err)
 		} else {
 			logrus.Infof("created post history for %s", ph.FullSlug)
@@ -145,7 +280,7 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 		return nil, fmt.Errorf("error creating watcher: %v", err)
 	}
 
-	absContentDir, err := filepath.Abs(c.Config.Content.ContentDir)
+	absContentDir, err := filepath.Abs(c.config.Content.ContentDir)
 	if err != nil {
 		return nil, fmt.Errorf("error getting absolute path: %v", err)
 	}
@@ -167,12 +302,15 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
 					logrus.Infof("modified file: %s", event.Name)
 					// reload this file
-					err := c.scanContentPath(event.Name, nil, nil)
+					c.cmsMux.Lock()
+					err := c.cms.scanContentPath(event.Name, nil, nil)
 					if err != nil {
 						logrus.Errorf("error reloading file %s: %v", event.Name, err)
 					} else {
 						logrus.Infof("reloaded file: %s", event.Name)
+
 					}
+					c.cmsMux.Unlock()
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
@@ -183,7 +321,7 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 		}
 	}()
 
-	err = watcher.Add(c.Config.Content.ContentDir)
+	err = watcher.Add(c.config.Content.ContentDir)
 	if err != nil {
 		return nil, fmt.Errorf("error adding watcher: %v", err)
 	}
@@ -192,92 +330,15 @@ func (c *ContentStuff) WatchContentChanges() (chan bool, error) {
 }
 
 func (c *ContentStuff) RefreshContent(path string) error {
-	path = filepath.Join(c.Config.Content.ContentDir, path)
-	return c.scanContentPath(path, nil, nil)
-}
-
-func (c *ContentStuff) scanContentPath(path string, info fs.FileInfo, err error) error {
-	if err != nil {
-		return err
-	}
-	relPath, err := filepath.Rel(c.Config.Content.ContentDir, path)
-	if err != nil {
-		return err
-	}
-
-	// if info is nil then os.Stat the path
-	if info == nil {
-		info, err = os.Stat(path)
-		if err != nil {
-			return err
-		}
-	}
-
-	//var ctime time.Time
-	//if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-	//	// convert to time.Time
-	//	ctime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
-	//}
-
-	if info.IsDir() {
-		c.FileName[relPath] = FileDetail{
-			FileName:   relPath,
-			FileType:   FileTypeDirectory,
-			LoadedAt:   time.Now(),
-			ModifiedAt: info.ModTime(),
-			CreatedAt:  info.ModTime(),
-		}
-	}
-
-	if !info.IsDir() && (filepath.Ext(path) == ".md" || filepath.Ext(path) == ".html") {
-
-		// if it already exists and modtime is same then skip
-		if existing, ok := c.FileName[relPath]; ok {
-			if existing.ModifiedAt.Equal(info.ModTime()) {
-				return nil
-			}
-		}
-
-		fileContent, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		mdParser := NewMarkdownParser(DefaultParserConfig())
-		pc, err := mdParser.Parse(fileContent)
-		if err != nil {
-			return err
-		}
-
-		fd := FileDetail{
-			FileName:      relPath,
-			ParsedContent: pc,
-			LoadedAt:      time.Now(),
-			ModifiedAt:    info.ModTime(),
-			FileType: func() FileType {
-				if filepath.Ext(path) == ".md" {
-					return FileTypeMarkdown
-				} else {
-					return FileTypeHTML
-				}
-			}(),
-			CreatedAt: info.ModTime(),
-		}
-		c.FileName[relPath] = fd
-
-		// crreate at <dir>/<slug>
-		pg := NewPageFromFileDetail(&fd)
-		slugPath := pg.Slug()
-		if slugPath != "" {
-			c.SlugFileMap[slugPath] = fd
-		}
-	}
-	return nil
+	path = filepath.Join(c.config.Content.ContentDir, path)
+	c.cmsMux.Lock()
+	defer c.cmsMux.Unlock()
+	return c.cms.scanContentPath(path, nil, nil)
 }
 
 func (c *ContentStuff) GetHistory(path string) []PostHistory {
 	var histories []PostHistory
-	result := c.DBHandle.Where("file_name = ? or full_slug = ?", path, path).Order("created DESC").Find(&histories)
+	result := c.dbHandle.Where("file_name = ? or full_slug = ?", path, path).Order("created DESC").Find(&histories)
 	if result.Error != nil {
 		logrus.Errorf("error getting history for %s: %v", path, result.Error)
 		return nil
@@ -306,7 +367,7 @@ func (c *ContentStuff) WriteFile(targetFile string, content string) error {
 }
 
 func (c *ContentStuff) ReadContentFile(fileName string) (string, error) {
-	targetFile := filepath.Join(c.Config.Content.ContentDir, fileName)
+	targetFile := filepath.Join(c.config.Content.ContentDir, fileName)
 	content, err := os.ReadFile(targetFile)
 	if err != nil {
 		return "", fmt.Errorf("error reading file: %v", err)
@@ -316,7 +377,7 @@ func (c *ContentStuff) ReadContentFile(fileName string) (string, error) {
 
 // WriteContentFile will resolve the content path to the directory before writing
 func (c *ContentStuff) WriteContentFile(fileName string, content string) error {
-	targetFile := filepath.Join(c.Config.Content.ContentDir, fileName)
+	targetFile := filepath.Join(c.config.Content.ContentDir, fileName)
 
 	c.WriteContentFileHistory(fileName, content)
 
@@ -335,7 +396,7 @@ func (c *ContentStuff) WriteContentFileHistory(fileName string, content string) 
 					HTML:     string(pg.File.ParsedContent.HTML),
 					Content:  content,
 				}
-				if err := c.DBHandle.Create(&ph).Error; err != nil {
+				if err := c.dbHandle.Create(&ph).Error; err != nil {
 					logrus.Errorf("error creating post history for %s: %v", ph.FullSlug, err)
 				} else {
 					logrus.Infof("created post history for %s", ph.FullSlug)
@@ -420,9 +481,9 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 		}
 
 		for _, ip := range wc.FindDependencies(fd.FileName) {
-			targetFile := filepath.Join(sc.Config.Content.ContentDir, ip)
+			targetFile := filepath.Join(sc.config.Content.ContentDir, ip)
 			if _, err := os.Stat(targetFile); err == nil {
-				relativeIP, err := filepath.Rel(sc.Config.Content.ContentDir, targetFile)
+				relativeIP, err := filepath.Rel(sc.config.Content.ContentDir, targetFile)
 				if err != nil {
 					logrus.Errorf("error getting relative path for %s: %v", ip, err)
 					continue
