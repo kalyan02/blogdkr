@@ -380,6 +380,16 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 			return fmt.Errorf("error writing file: %v", err)
 		}
 
+		err = wc.ScanContentFileForQueries(fd.FileName)
+		if err != nil {
+			return fmt.Errorf("error scanning content file for queries: %v", err)
+		}
+
+		err = wc.NotifyFileChanged(fd.FileName)
+		if err != nil {
+			return fmt.Errorf("error notifying file %s changed: %v", fd.FileName, err)
+		}
+
 		// refresh the dir
 		err = sc.RefreshContent(filepath.Dir(fd.FileName))
 		if err != nil {
@@ -419,14 +429,6 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 				if err != nil {
 					logrus.Errorf("error scanning content file for queries %s: %v", ip, err)
 				}
-				//err = wc.TriggerDependencyUpdates(relativeIP)
-				//if err != nil {
-				//	logrus.Errorf("error notifying file change for %s: %v", ip, err)
-				//}
-				//err = sc.RefreshContent(relativeIP)
-				//if err != nil {
-				//	logrus.Errorf("error refreshing content for %s: %v", ip, err)
-				//}
 			}
 		}
 

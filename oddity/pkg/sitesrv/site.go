@@ -292,7 +292,7 @@ func (s *SiteApp) render404ButMaybeCreate(c *gin.Context, path string) {
 <p>The page you are looking for does not exist.</p>
 <p>Create as<br>
  - <a href="/admin/edit?path={path}">page: ({path}.md)</a><br>
- - <a href="/admin/edit?path={path}/index.md">folder: ({path}/index.md)</a><br>
+ - <a href="/admin/edit?path={path}/index">folder: ({path}/index.md)</a><br>
 </p>
 `))
 
