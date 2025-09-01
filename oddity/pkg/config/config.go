@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Content ContentConfig `toml:"content"`
 	Site    SiteConfig    `toml:"site"`
+	Admin   SiteConfig    `toml:"admin,omitempty"` // admin overrides
 
 	filePath string
 }
@@ -66,24 +67,56 @@ func (c Config) ResolveDir(path string) (string, error) {
 	return utils.ResolveRelative(path, confPath)
 }
 
+func (c Config) GetSiteConfig(isAdmin bool) SiteConfig {
+	if isAdmin {
+		// merge admin config with site config
+		siteConfig := c.Site
+
+		if c.Admin.Title != "" {
+			siteConfig.Title = c.Admin.Title
+		}
+		if c.Admin.Description != "" {
+			siteConfig.Description = c.Admin.Description
+		}
+		if c.Admin.BaseURL != "" {
+			siteConfig.BaseURL = c.Admin.BaseURL
+		}
+		if c.Admin.Author != "" {
+			siteConfig.Author = c.Admin.Author
+		}
+		if c.Admin.AuthorEmail != "" {
+			siteConfig.AuthorEmail = c.Admin.AuthorEmail
+		}
+		if len(c.Admin.Navigation) > 0 {
+			siteConfig.Navigation = c.Admin.Navigation
+		}
+		if c.Admin.DefaultNewHint != "" {
+			siteConfig.DefaultNewHint = c.Admin.DefaultNewHint
+		}
+
+		return siteConfig
+	}
+	return c.Site
+}
+
 type ContentConfig struct {
-	ContentDir     string   `toml:"content_dir"`
-	StaticDirs     []string `toml:"static_dirs"`
-	UploadDir      string   `toml:"upload_dir,omitempty"`
-	ThemeDir       string   `toml:"theme_dir,omitempty"`
-	Addr           string   `toml:"addr"`
-	DefaultNewHint string   `toml:"default_new_hint"`
-	SidecarDB      string   `toml:"sidecar_db"`
-	AdminAddr      string   `toml:"admin_addr,omitempty"`
+	ContentDir string   `toml:"content_dir"`
+	StaticDirs []string `toml:"static_dirs"`
+	UploadDir  string   `toml:"upload_dir,omitempty"`
+	ThemeDir   string   `toml:"theme_dir,omitempty"`
+	Addr       string   `toml:"addr"`
+	SidecarDB  string   `toml:"sidecar_db"`
+	AdminAddr  string   `toml:"admin_addr,omitempty"`
 }
 
 type SiteConfig struct {
-	Title       string           `toml:"title"`
-	Description string           `toml:"description,omitempty"`
-	BaseURL     string           `toml:"base_url,omitempty"`
-	Navigation  []NavigationLink `toml:"navigation,inline"`
-	AuthorEmail string           `toml:"author_email,omitempty"`
-	Author      string           `toml:"author"`
+	Title          string           `toml:"title"`
+	Description    string           `toml:"description,omitempty"`
+	BaseURL        string           `toml:"base_url,omitempty"`
+	Navigation     []NavigationLink `toml:"navigation,inline"`
+	AuthorEmail    string           `toml:"author_email,omitempty"`
+	Author         string           `toml:"author"`
+	DefaultNewHint string           `toml:"default_new_hint,omitempty"`
 }
 
 type NavigationLink struct {
@@ -94,13 +127,12 @@ type NavigationLink struct {
 }
 
 var DefaultConfig = ContentConfig{
-	ContentDir:     "content",
-	StaticDirs:     []string{"static"},
-	UploadDir:      "uploads",
-	SidecarDB:      "sqlite.db",
-	ThemeDir:       "tmpl",
-	DefaultNewHint: "blog",
-	Addr:           "0.0.0.0:8081",
+	ContentDir: "content",
+	StaticDirs: []string{"static"},
+	UploadDir:  "uploads",
+	SidecarDB:  "sqlite.db",
+	ThemeDir:   "tmpl",
+	Addr:       "0.0.0.0:8081",
 }
 
 var DefaultSiteConfig = SiteConfig{
@@ -118,4 +150,5 @@ var DefaultSiteConfig = SiteConfig{
 			URL:  "/about",
 		},
 	},
+	DefaultNewHint: "blog",
 }

@@ -112,7 +112,7 @@ func (w *Wire) ScanContentFileForQueries(filePath string) error {
 
 // extractQueriesFromFile finds all query comments in a file
 func (w *Wire) extractQueriesFromFile(filePath string) ([]QueryLocation, error) {
-	fullPath := filepath.Join(w.content.ContentConfig.ContentDir, filePath)
+	fullPath := filepath.Join(w.content.Config.Content.ContentDir, filePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, err
@@ -274,7 +274,7 @@ func (w *Wire) updateQuery(fileCtx *FileDetail, location QueryLocation) error {
 	}
 
 	// Read current file content
-	fullPath := filepath.Join(w.content.ContentConfig.ContentDir, location.FilePath)
+	fullPath := filepath.Join(w.content.Config.Content.ContentDir, location.FilePath)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return err

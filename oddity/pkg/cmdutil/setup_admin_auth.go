@@ -60,7 +60,7 @@ func RunAdminAuthSetup(configPath string) {
 	}
 
 	// Initialize content system for database access
-	siteContent := contentstuff.NewContentStuff(cfg.Content)
+	siteContent := contentstuff.NewContentStuff(&cfg)
 	err = siteContent.LoadContent()
 	if err != nil {
 		logrus.Fatalf("Failed to load content system: %v", err)

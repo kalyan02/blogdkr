@@ -34,7 +34,7 @@ func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 
 	// check if it is a static file is that's requested
 	if IsStaticFile(requestPath) {
-		for _, staticDir := range s.SiteContent.ContentConfig.StaticDirs {
+		for _, staticDir := range s.SiteContent.Config.Content.StaticDirs {
 			staticFilePath := filepath.Join(staticDir, requestPath)
 			if _, err := os.Stat(staticFilePath); err == nil {
 				c.File(staticFilePath)
@@ -122,31 +122,6 @@ func (s *SiteApp) renderIndexAtPath(c *gin.Context, path string) {
 	s.render404(c)
 }
 
-func (s *SiteApp) buildPageNavLinks(page *contentstuff.Page) []config.NavigationLink {
-
-	parentSlug := "/"
-	if strings.Contains(page.Slug(), "/") {
-		parentSlug = filepath.Dir(page.Slug())
-		parentSlug = strings.Trim(parentSlug, "./")
-		// add prefix
-		parentSlug = "/" + parentSlug
-	}
-
-	if parentSlug == "/" || parentSlug == "/index" || parentSlug == "/blog" {
-		return s.Config.Site.Navigation
-	}
-
-	var links []config.NavigationLink
-
-	prevLink := config.NavigationLink{
-		Name: "Home",
-		URL:  parentSlug,
-	}
-	links = append(links, prevLink)
-
-	return links
-}
-
 func (s *SiteApp) backLinkToParent(path string) string {
 	if path == "" || path == "." || path == "/" || path == "index" {
 		return ""
@@ -173,11 +148,8 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 		return
 	}
 
-	sc := s.Config.Site
-	sc.Navigation = s.buildPageNavLinks(page)
-
 	indexPage := contentstuff.PostPage{
-		Site: sc,
+		Site: s.buildSiteConfigWithNav(c, page.Slug()),
 		Meta: contentstuff.PageMeta{
 			Title: page.Title(),
 		},
@@ -194,6 +166,35 @@ func (s *SiteApp) renderIndexFileAtPath(c *gin.Context, path string) {
 	fmt.Println(c.Errors)
 }
 
+func (s *SiteApp) buildSiteConfigWithNav(c *gin.Context, page string) config.SiteConfig {
+	isAuth := authz.IsAuthenticated(c)
+	sc := s.Config.GetSiteConfig(isAuth)
+
+	parentSlug := "/"
+	if strings.Contains(page, "/") {
+		parentSlug = filepath.Dir(page)
+		parentSlug = strings.Trim(parentSlug, "./")
+		// add prefix
+		parentSlug = "/" + parentSlug
+	}
+
+	if parentSlug == "/" || parentSlug == "/index" || parentSlug == "/blog" {
+		return sc
+	}
+
+	var links []config.NavigationLink
+
+	prevLink := config.NavigationLink{
+		Name: "Home",
+		URL:  parentSlug,
+	}
+	links = append(links, prevLink)
+
+	sc.Navigation = links
+
+	return sc
+}
+
 func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 	// load the file content and render it
 	page := contentstuff.NewPageFromFileDetail(&file)
@@ -205,11 +206,8 @@ func (s *SiteApp) renderPage(c *gin.Context, file contentstuff.FileDetail) {
 		}
 	}
 
-	sc := s.Config.Site
-	sc.Navigation = s.buildPageNavLinks(page)
-
 	postPage := contentstuff.PostPage{
-		Site:            sc,
+		Site:            s.buildSiteConfigWithNav(c, page.Slug()),
 		EditURL:         fmt.Sprintf("/admin/edit?path=%s", page.Slug()),
 		IsAuthenticated: authz.IsAuthenticated(c),
 		IsPrivate:       contentstuff.IsPrivate(s.SiteContent, file),
@@ -236,7 +234,7 @@ func (s *SiteApp) createNewPostSlugHint(path *contentstuff.Page) string {
 func (s *SiteApp) createNewPostSlugHintFromPath(currSlug string) string {
 	slugDir := filepath.Dir(currSlug)
 	if slugDir == "." {
-		slugDir = s.SiteContent.ContentConfig.DefaultNewHint
+		slugDir = s.SiteContent.Config.GetSiteConfig(true).DefaultNewHint
 	}
 
 	today := time.Now().Format("2006-01-02")
@@ -265,7 +263,7 @@ func (s *SiteApp) createFeedsLink(pg *contentstuff.Page) string {
 
 func (s *SiteApp) render404(c *gin.Context) {
 	postPage := contentstuff.PostPage{
-		Site: s.Config.Site,
+		Site: s.buildSiteConfigWithNav(c, ""), // page is only used for nav and we don't care for public 404
 	}
 	postPage.Meta = contentstuff.PageMeta{
 		Title: "404 Not Found",
@@ -278,16 +276,25 @@ func (s *SiteApp) render404(c *gin.Context) {
 
 func (s *SiteApp) render404ButMaybeCreate(c *gin.Context, path string) {
 	postPage := contentstuff.PostPage{
-		Site:            s.Config.Site,
+		Site:            s.buildSiteConfigWithNav(c, path),
 		IsAuthenticated: authz.IsAuthenticated(c),
 		NewPostHintSlug: s.createNewPostSlugHintFromPath(path),
 	}
 	postPage.Meta = contentstuff.PageMeta{
 		Title: "404 Not Found",
 	}
-	postPage.PageHTML = template.HTML(fmt.Sprintf(`
+
+	replacer := strings.NewReplacer(
+		"{path}", path,
+	)
+
+	postPage.PageHTML = template.HTML(replacer.Replace(`
 <p>The page you are looking for does not exist.</p>
-<p><a href="/admin/edit?path=%s">Create it</a></p>`, path))
+<p>Create as<br>
+ - <a href="/admin/edit?path={path}">page: ({path}.md)</a><br>
+ - <a href="/admin/edit?path={path}/index.md">folder: ({path}/index.md)</a><br>
+</p>
+`))
 
 	c.HTML(http.StatusNotFound, "post.html", postPage)
 
@@ -295,7 +302,7 @@ func (s *SiteApp) render404ButMaybeCreate(c *gin.Context, path string) {
 
 func (s *SiteApp) renderError(c *gin.Context, path string) {
 	postPage := contentstuff.PostPage{
-		Site:            s.Config.Site,
+		Site:            s.buildSiteConfigWithNav(c, path),
 		IsAuthenticated: authz.IsAuthenticated(c),
 		NewPostHintSlug: s.createNewPostSlugHintFromPath(path),
 		Meta: contentstuff.PageMeta{

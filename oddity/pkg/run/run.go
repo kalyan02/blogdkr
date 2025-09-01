@@ -21,7 +21,7 @@ var wireController *contentstuff.Wire
 
 func StartServer(cfg config.Config) {
 	startT := time.Now()
-	siteContent = contentstuff.NewContentStuff(cfg.Content)
+	siteContent = contentstuff.NewContentStuff(&cfg)
 	err := siteContent.LoadContent()
 	if err != nil {
 		logrus.Fatalf("error loading content: %v", err)
