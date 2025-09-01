@@ -107,6 +107,10 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 			file.ParsedContent.Frontmatter.SetValue("created", time.Now().Unix())
 			file.ParsedContent.Frontmatter.SetValue("created_time", time.Now().Format("2006-01-02 15:04:05"))
 		}
+		if !file.ParsedContent.Frontmatter.HasKey("created") {
+			file.ParsedContent.Frontmatter.SetValue("created", time.Now().Unix())
+			file.ParsedContent.Frontmatter.SetValue("created_time", time.Now().Format("2006-01-02 15:04:05"))
+		}
 		file.ParsedContent.Frontmatter.SetValue("updated", time.Now().Unix())
 		file.ParsedContent.Frontmatter.SetValue("updated_time", time.Now().Format("2006-01-02 15:04:05"))
 

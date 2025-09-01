@@ -400,8 +400,7 @@ func (w *Wire) executePostsQuery(ctx *FileDetail, query *QueryAST) []FileDetail 
 	var posts []FileDetail
 	var allFiles = w.content.AllFiles()
 	for _, file := range allFiles {
-		if (file.FileType == FileTypeMarkdown || file.FileType == FileTypeHTML) &&
-			!strings.HasSuffix(file.FileName, "index.md") {
+		if file.FileType == FileTypeMarkdown || file.FileType == FileTypeHTML {
 
 			// Apply path filtering if specified
 			if query.Path != "" {

@@ -856,14 +856,14 @@
             }
 
             // Add Cmd+S / Ctrl+S keyboard shortcut for save
-            document.addEventListener('keydown', function(e) {
-                if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-                    e.preventDefault(); // Prevent browser save dialog
-                    if (app && app.saveContent) {
-                        app.saveContent();
-                    }
-                }
-            });
+            // document.addEventListener('keydown', function(e) {
+            //     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            //         e.preventDefault(); // Prevent browser save dialog
+            //         if (app && app.saveContent) {
+            //             app.saveContent();
+            //         }
+            //     }
+            // });
 
         });
 
