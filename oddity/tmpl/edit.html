@@ -372,6 +372,24 @@
             font-size: 1.25em;
         }
 
+        /* Mobile font-size fix to prevent auto-zoom */
+        /*@media (max-width: 1023px) {*/
+        /*    input, textarea, select {*/
+        /*        font-size: 16px !important;*/
+        /*    }*/
+        /*}*/
+
+        /* Hide number input spinners */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
         /* Beautiful focus states - scoped */
         .overtype-editor-app .CodeMirror-focused {
             /*box-shadow: 0 0 0 2px var(--oe-selection);*/
@@ -383,7 +401,7 @@
         }
     </style>
 </head>
-<body class="font-mono bg-white min-h-screen">
+<body class="font-mono bg-white min-h-screen text-sm">
     <div id="app">
         <!-- Navigation Bar -->
         <div class="py-1 border-b-0 border-gray-100 nav-fade" :class="{ 'nav-fade': !distractionFree }">
@@ -413,16 +431,16 @@
                 <!-- Right: Controls -->
                 <div class="flex gap-1 justify-center">
                     <button @click="toggleSidebar"
-                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all">
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all hidden lg:block">
                         [[ sidebarVisible ? '✕' : '≡' ]]
                     </button>
                     <button @click="toggleSidebarPosition"
-                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all"
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all hidden lg:block"
                             title="Move sidebar below content">
                         [[ sidebarBelow ? '↑' : '↓' ]]
                     </button>
                     <button @click="cycleEditorWidth"
-                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all"
+                            class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-all hidden lg:block"
                             :title="'Editor width: ' + editorWidthOptions[editorWidth].label">
                         [[ editorWidthOptions[editorWidth].icon ]]
                     </button>
@@ -434,7 +452,7 @@
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-green-600 hover:text-white hover:bg-green-600 transition-all">
                         💾
                     </button>
-                    <button @click="triggerFileInput" 
+                    <button @click="triggerFileInputWithAutoUpload" 
                             class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-blue-600 hover:text-white hover:bg-blue-600 transition-all lg:hidden">
                         📷
                     </button>
@@ -511,7 +529,7 @@
                     <div v-show="sections.frontmatter">
                         <textarea v-model="frontmatter"
                                   @input="updateFrontmatter"
-                                  class="w-full h-24 text-xs border border-gray-200 p-2 font-mono resize-y outline-none bg-gray-50 focus:border-blue-500 rounded"
+                                  class="w-full h-24 text-sm border border-gray-200 p-2 font-mono resize-y outline-none bg-gray-50 focus:border-blue-500 rounded"
                                   placeholder="title: My Post&#10;tags: [blog, markdown]&#10;date: 2024-01-01&#10;public: true">
                         </textarea>
                         <div v-if="frontmatter === ''" class="text-xs text-gray-400 mt-1">Frontmatter is empty</div>
@@ -557,8 +575,8 @@
                                     <!-- Image resize controls for pending images -->
                                     <div v-if="file.type === 'image'" class="mt-2">
                                         <div class="flex gap-1 items-center">
-                                            <input v-model="file.resizeWidth" type="number" placeholder="Width" class="w-16 p-1 border border-gray-300 rounded text-xs">
-                                            <input v-model="file.resizeHeight" type="number" placeholder="Height" class="w-16 p-1 border border-gray-300 rounded text-xs">
+                                            <input v-model="file.resizeWidth" type="number" placeholder="Width" class="w-16 p-1 border border-gray-300 rounded text-base text-xs">
+                                            <input v-model="file.resizeHeight" type="number" placeholder="Height" class="w-16 p-1 border border-gray-300 rounded text-base text-xs">
                                             <span class="text-xs text-gray-500">(optional)</span>
                                         </div>
                                     </div>
@@ -603,6 +621,27 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                        
+                        <!-- Global Resize Dimensions -->
+                        <div class="mt-3 pt-3 border-t border-gray-200">
+                            <div class="text-xs text-gray-600 mb-2">Default Image Resize (optional):</div>
+                            <div class="flex gap-2 items-center">
+                                <input v-model="globalResizeWidth" type="number" placeholder="Width" 
+                                       class="w-16 p-1 border border-gray-300 rounded text-base text-sm">
+                                <span class="text-xs text-gray-500">×</span>
+                                <input v-model="globalResizeHeight" type="number" placeholder="Height" 
+                                       class="w-16 p-1 border border-gray-300 rounded text-base text-sm">
+                                <span class="text-xs text-gray-500">px</span>
+                                <div class="flex items-center gap-1 pl-4 ml-2 border-l cursor-pointer"
+                                     @click="autoUploadEnabled = !autoUploadEnabled">
+                                    <span class="text-sm text-gray-500 select-none">Auto-upload:</span>
+                                    <input v-model="autoUploadEnabled" type="checkbox" 
+                                           class="w-3 h-3 text-blue-600 border border-gray-300 rounded focus:ring-blue-500 pointer-events-none"
+                                           tabindex="-1">
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">Applied to new uploads automatically</div>
                         </div>
                     </div>
                 </div>
@@ -680,13 +719,13 @@
                                     v-model="newSlug" 
                                     type="text" 
                                     :placeholder="currentSlug"
-                                    class="flex-1 text-xs border border-gray-300 rounded px-2 py-1 bg-gray-50 focus:border-blue-500 focus:bg-white outline-none font-mono"
+                                    class="flex-1 text-base text-sm border border-gray-300 rounded px-2 py-1 bg-gray-50 focus:border-blue-500 focus:bg-white outline-none font-mono"
                                     :disabled="renaming"
                                 />
                                 <button 
                                     @click="renamePost" 
                                     :disabled="renaming || !newSlug || newSlug === currentSlug"
-                                    class="px-3 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap">
+                                    class="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap">
                                     <span v-if="renaming">Renaming...</span>
                                     <span v-else>Rename</span>
                                 </button>
@@ -990,7 +1029,11 @@
                     newSlug: defaultLoadedData.fullSlug || '',
                     renaming: false,
                     renameError: null,
-                    renameSuccess: false
+                    renameSuccess: false,
+                    globalResizeWidth: '1600',
+                    globalResizeHeight: '2400',
+                    autoUploadNext: false,
+                    autoUploadEnabled: true
                 }
             },
             computed: {
@@ -1098,9 +1141,20 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 triggerFileInput() {
                     this.$refs.fileInput.click()
                 },
-                handleFileSelect(event) {
+                async triggerFileInputWithAutoUpload() {
+                    // Set a flag to enable auto-upload after file selection (only if toggle is enabled)
+                    this.autoUploadNext = this.autoUploadEnabled
+                    this.$refs.fileInput.click()
+                },
+                async handleFileSelect(event) {
                     const files = Array.from(event.target.files)
                     this.addPendingFiles(files)
+                    
+                    // Auto-upload if flag is set (from camera icon click)
+                    if (this.autoUploadNext && files.length > 0) {
+                        this.autoUploadNext = false // Reset flag
+                        await this.uploadPendingFiles()
+                    }
                 },
                 handleDrop(event) {
                     event.preventDefault()
@@ -1115,8 +1169,10 @@ Start writing your content here. The editor is now centered with a fixed maximum
                             name: file.name,
                             type: file.type.startsWith('image/') ? 'image' : 'file',
                             file: file, // Store the actual file object for upload
-                            resizeWidth: file.type.startsWith('image/') ? CONFIG.DEFAULT_IMAGE_WIDTH.toString() : '',
-                            resizeHeight: file.type.startsWith('image/') ? CONFIG.DEFAULT_IMAGE_HEIGHT.toString() : ''
+                            resizeWidth: file.type.startsWith('image/') ? 
+                                (this.globalResizeWidth || CONFIG.DEFAULT_IMAGE_WIDTH.toString()) : '',
+                            resizeHeight: file.type.startsWith('image/') ? 
+                                (this.globalResizeHeight || CONFIG.DEFAULT_IMAGE_HEIGHT.toString()) : ''
                         }
                         this.pendingFiles.push(pendingFile)
                     })
