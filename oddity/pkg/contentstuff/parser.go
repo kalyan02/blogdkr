@@ -7,43 +7,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/BurntSushi/toml"
-	"github.com/goccy/go-yaml"
 	"github.com/gomarkdown/markdown"
 	"github.com/gomarkdown/markdown/ast"
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
 )
-
-// FrontmatterType represents the type of frontmatter delimiter used
-type FrontmatterType int
-
-const (
-	FrontmatterNone FrontmatterType = iota
-	FrontmatterYAML                 // --- delimited YAML
-	FrontmatterTOML                 // +++ delimited TOML
-)
-
-// FrontmatterData holds parsed frontmatter content and metadata
-type FrontmatterData struct {
-	Type     FrontmatterType
-	Raw      string
-	Data     map[string]interface{}
-	StartPos int
-	EndPos   int
-}
-
-func (fm *FrontmatterData) SetRaw(data []byte) error {
-	fm.Raw = string(data)
-	switch fm.Type {
-	case FrontmatterYAML:
-		return yaml.Unmarshal(data, &fm.Data)
-	case FrontmatterTOML:
-		return toml.Unmarshal(data, &fm.Data)
-	default:
-		return nil
-	}
-}
 
 // ParserConfig holds configuration for the markdown parser
 type ParserConfig struct {
@@ -223,7 +191,7 @@ func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 	bodyContent := content
 	if mp.config.EnableFrontmatter {
 		var err error
-		result.Frontmatter, bodyContent, err = mp.ExtractFrontmatter(content)
+		result.Frontmatter, bodyContent, err = ExtractFrontmatter(content)
 		if err != nil {
 			return nil, fmt.Errorf("frontmatter parsing error: %w", err)
 		}
@@ -243,7 +211,7 @@ func (mp *MarkdownParser) Parse(content []byte) (*ParsedContent, error) {
 	}
 	// Set title from frontmatter or first H1
 	if result.Title == "" && result.Frontmatter != nil {
-		if title, ok := result.Frontmatter.Data["title"].(string); ok && title != "" {
+		if title, ok := result.Frontmatter.DataKV["title"].(string); ok && title != "" {
 			result.Title = title
 		}
 	}
@@ -303,50 +271,6 @@ func RemoveFirstH1(markdown []byte, linesToSearch int) ([]byte, bool) {
 	}
 
 	return []byte(strings.Join(result, "\n")), h1Removed
-}
-
-// ExtractFrontmatter extracts and parses frontmatter from content
-func (mp *MarkdownParser) ExtractFrontmatter(content []byte) (*FrontmatterData, []byte, error) {
-	if len(content) == 0 {
-		return nil, content, nil
-	}
-
-	// Check for YAML frontmatter (---)
-	// Use (?s) flag for . to match newlines
-	if yamlMatch := regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\s*\n`).FindSubmatch(content); yamlMatch != nil {
-		frontmatter := &FrontmatterData{
-			Type:   FrontmatterYAML,
-			EndPos: len(yamlMatch[0]),
-			Data:   make(map[string]interface{}),
-		}
-
-		if err := frontmatter.SetRaw(yamlMatch[1]); err != nil {
-			return nil, content, fmt.Errorf("failed to parse YAML frontmatter: %w", err)
-		}
-
-		body := content[frontmatter.EndPos:]
-		return frontmatter, body, nil
-	}
-
-	// Check for TOML frontmatter (+++)
-	// Use (?s) flag for . to match newlines
-	if tomlMatch := regexp.MustCompile(`(?s)^\+\+\+\s*\n(.*?)\n\+\+\+\s*\n`).FindSubmatch(content); tomlMatch != nil {
-		frontmatter := &FrontmatterData{
-			Type:   FrontmatterTOML,
-			EndPos: len(tomlMatch[0]),
-			Data:   make(map[string]interface{}),
-		}
-
-		if err := frontmatter.SetRaw(tomlMatch[1]); err != nil {
-			return nil, content, fmt.Errorf("failed to parse TOML frontmatter: %w", err)
-		}
-
-		body := content[frontmatter.EndPos:]
-		return frontmatter, body, nil
-	}
-
-	// No frontmatter found
-	return nil, content, nil
 }
 
 // ExtractPlainText converts markdown to plain text, removing all formatting
@@ -729,115 +653,3 @@ func extractNodeText(node ast.Node) string {
 }
 
 // Helper methods for FrontmatterData
-
-// GetString safely gets a string value from frontmatter data
-func (fm *FrontmatterData) GetString(key string) (string, bool) {
-	if fm == nil || fm.Data == nil {
-		return "", false
-	}
-	if val, ok := fm.Data[key]; ok {
-		if str, ok := val.(string); ok {
-			return str, true
-		}
-	}
-	return "", false
-}
-
-// SetString safely sets a string value in frontmatter data
-func (fm *FrontmatterData) SetString(key, value string) {
-	if fm == nil {
-		return
-	}
-	if fm.Data == nil {
-		fm.Data = make(map[string]interface{})
-	}
-	fm.Data[key] = value
-}
-
-// SetValue safely sets a value of any type in frontmatter data
-func (fm *FrontmatterData) SetValue(key string, value any) {
-	if fm == nil {
-		return
-	}
-	if fm.Data == nil {
-		fm.Data = make(map[string]interface{})
-	}
-	fm.Data[key] = value
-}
-
-// GetValue safely gets a value of any type from frontmatter data
-func (fm *FrontmatterData) GetValue(key string) (any, bool) {
-	if fm == nil || fm.Data == nil {
-		return nil, false
-	}
-	val, ok := fm.Data[key]
-	return val, ok
-}
-
-// GetStringSlice safely gets a string slice from frontmatter data
-func (fm *FrontmatterData) GetStringSlice(key string) []string {
-	if fm == nil || fm.Data == nil {
-		return nil
-	}
-	if val, ok := fm.Data[key]; ok {
-		switch v := val.(type) {
-		case []string:
-			return v
-		case []interface{}:
-			result := make([]string, 0, len(v))
-			for _, item := range v {
-				if str, ok := item.(string); ok {
-					result = append(result, str)
-				}
-			}
-			return result
-		}
-	}
-	return nil
-}
-
-// GetBool safely gets a boolean value from frontmatter data
-func (fm *FrontmatterData) GetBool(key string) bool {
-	if fm == nil || fm.Data == nil {
-		return false
-	}
-	if val, ok := fm.Data[key]; ok {
-		if b, ok := val.(bool); ok {
-			return b
-		}
-	}
-	return false
-}
-
-// HasKey checks if a key exists in frontmatter data
-func (fm *FrontmatterData) HasKey(key string) bool {
-	if fm == nil || fm.Data == nil {
-		return false
-	}
-	_, exists := fm.Data[key]
-	return exists
-}
-
-// Marshal the frontmatter data to string
-func (fm *FrontmatterData) Marshal() (string, error) {
-	if fm == nil {
-		return "", nil
-	}
-	switch fm.Type {
-	case FrontmatterYAML:
-		out, err := yaml.Marshal(fm.Data)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("---\n%s---", string(out)), nil
-	case FrontmatterTOML:
-		var buf bytes.Buffer
-		encoder := toml.NewEncoder(&buf)
-		if err := encoder.Encode(fm.Data); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("+++\n%s+++", buf.String()), nil
-	default:
-		return "", nil
-	}
-}

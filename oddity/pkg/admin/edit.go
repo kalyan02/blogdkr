@@ -86,7 +86,7 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 
 		var fm *contentstuff.FrontmatterData
 		if file.ParsedContent == nil || file.ParsedContent.Frontmatter == nil {
-			fm, _, err = parser.ExtractFrontmatter([]byte("---\n" + reqData.Frontmatter + "\n---\n"))
+			fm, _, err = contentstuff.ExtractFrontmatter([]byte("---\n" + reqData.Frontmatter + "\n---\n"))
 			if err != nil {
 				c.JSON(500, gin.H{"error": fmt.Sprintf("error parsing frontmatter: %v", err)})
 				return
@@ -189,8 +189,7 @@ func (s *AdminApp) HandleEditPageData(c *gin.Context) {
 				if i >= 20 {
 					break
 				}
-				mdParser := contentstuff.NewMarkdownParser(contentstuff.DefaultParserConfig())
-				_, body, err := mdParser.ExtractFrontmatter([]byte(hf.Content))
+				_, body, err := contentstuff.ExtractFrontmatter([]byte(hf.Content))
 				if err != nil {
 					continue
 				}
