@@ -347,8 +347,8 @@ End of page.`,
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a mock Wire instance
 			contentStuff := &ContentStuff{
-				FileName:      make(map[string]FileDetail),
-				ContentConfig: config.ContentConfig{ContentDir: "/test"},
+				FileName: make(map[string]FileDetail),
+				Config:   &config.Config{Content: config.ContentConfig{ContentDir: "/test"}},
 			}
 			wire := NewWire(contentStuff)
 

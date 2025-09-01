@@ -990,6 +990,7 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     this.saveEditorWidthState()
                 },
                 async saveContent() {
+                    await this.$nextTick(); // Ensure UI updates before saving
                     try {
                         const response = await fetch('/admin/edit-data?action=save', {
                             method: 'POST',

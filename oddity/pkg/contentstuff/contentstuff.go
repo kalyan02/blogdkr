@@ -380,6 +380,12 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 			return fmt.Errorf("error writing file: %v", err)
 		}
 
+		// refresh the file
+		err = sc.RefreshContent(fd.FileName)
+		if err != nil {
+			return fmt.Errorf("error refreshing content: %v", err)
+		}
+
 		err = wc.ScanContentFileForQueries(fd.FileName)
 		if err != nil {
 			return fmt.Errorf("error scanning content file for queries: %v", err)

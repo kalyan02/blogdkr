@@ -30,6 +30,9 @@ type FrontmatterData struct {
 func (fm *FrontmatterData) SetRaw(data []byte) error {
 	fm.Raw = string(data)
 	var err error
+
+	fm.Data = make(yaml.MapSlice, 0)
+	fm.DataKV = make(map[string]interface{})
 	switch fm.Type {
 	case FrontmatterYAML:
 		err = yaml.Unmarshal(data, &fm.Data)

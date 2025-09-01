@@ -293,8 +293,8 @@ This is a **test** post with #hashtags and a [[WikiLink]].`)
 	}
 
 	// validate all frontmatter keys are the same
-	for k, v := range result.Frontmatter.Data {
-		v2, ok := result2.Frontmatter.Data[k]
+	for k, v := range result.Frontmatter.DataKV {
+		v2, ok := result2.Frontmatter.DataKV[k]
 		if !ok {
 			t.Errorf("Expected frontmatter key '%s' to exist after roundtrip", k)
 			continue
