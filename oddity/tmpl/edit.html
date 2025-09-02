@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://unpkg.com/overtype/dist/overtype.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css"
           integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ=="
           crossorigin="anonymous" referrerpolicy="no-referrer"/>
@@ -403,6 +402,17 @@
 </head>
 <body class="font-mono bg-white min-h-screen text-sm">
     <div id="app">
+        <!-- Full-Page Drop Overlay -->
+        <div v-if="isPageDragOver"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-0 backdrop-blur-xs">
+            <div class="inset-0 m-10 border-4-dashed items-center justify-center fixed flex border-white-300 rounded-lg p-10 border-2 border-dashed border-gray-400 backdrop-blur-sm">
+            <div class="text-center text-gray-400">
+                <div class="text-6xl mb-4">🗂️</div>
+                <div class="text-2xl font-semibold mb-2">Drop files anywhere to upload</div>
+                <div class="text-lg opacity-80">Images will be automatically resized and inserted</div>
+            </div>
+            </div>
+        </div>
         <!-- Navigation Bar -->
         <div class="py-1 border-b-0 border-gray-100 nav-fade" :class="{ 'nav-fade': !distractionFree }">
             <div :class="'mx-auto px-2 pt-2 pb-2 flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-2 ' + editorWidthOptions[editorWidth].containerClass">
@@ -414,13 +424,14 @@
                         [[ link.name ]]
                     </a>
                     <span v-if="!distractionFree" class="text-xs text-gray-400 px-1 py-1 hidden lg:inline">|</span>
-                    <input  v-if="!distractionFree" type="text" value="/{{.NewPostHintSlug}}" id="new-post-hint"
-                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 cursor-pointer w-full max-w-60 lg:w-60" />
+                    <input  v-if="!distractionFree" name="location" type="text" value="/{{.NewPostHintSlug}}" id="new-post-hint"
+                      class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50 text-gray-500 cursor-pointer w-full max-w-60 lg:w-60"
+                      @keyup.enter="openNewPostHint" autocomplete="off" data-1p-ignore="true"  />
 
                     <input  v-if="!distractionFree"  type="button" value="Add"
-                      onclick="location.href='/admin/edit?path=' + document.getElementById('new-post-hint').value"
+                      @click="openNewPostHint"
                       class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer" />
-                    <a  v-if="!distractionFree" href="/auth" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+                    <a v-if="!distractionFree" href="/auth" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
                         Auth
                     </a>
                     <a  v-if="!distractionFree" href="/auth/logout" class="text-xs px-2 py-1 border border-gray-300 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
@@ -768,49 +779,29 @@
 
         var defaultLoadedData = tryJSON("{{.Data}}", {});
 
+        function selectTextInEditor(editor, searchText, fromEnd = true) {
+          const content = editor.getValue();
+
+          if (fromEnd && !content.endsWith(searchText)) {
+            return false;
+          }
+
+          const startPos = fromEnd ? content.lastIndexOf(searchText) : content.indexOf(searchText);
+
+          if (startPos !== -1) {
+            const startCoords = editor.posFromIndex(startPos);
+            const endCoords = editor.posFromIndex(startPos + searchText.length);
+            editor.setSelection(startCoords, endCoords);
+            return true;
+          }
+
+          return false;
+        }
 
         var overtypeEditor = null;
         var codemirrorEditor = null;
         // document on load
         document.addEventListener("DOMContentLoaded", function() {
-            // Create a single editor
-            const OT = window.OverType.default || window.OverType;
-            if(document.getElementsByClassName("richeditor").length > 0) {
-                // document.getElementsByClassName("editorboxreal")[0].style.display = 'none';
-                overtypeEditor = new OT(".richeditor", {
-                    value: defaultLoadedData.content || '',
-                    theme: "light",
-                    autoResize: true,
-                    fontSize: '14px',
-                    smartLists: false,
-                    tabSize: 4,
-                    minHeight: CONFIG.EDITOR_MIN_HEIGHT + 'px',
-                    onChange: (value) => {
-                        app.content = value;
-                    },
-                    textAreaProps: {
-                        spellcheck: 'true',
-                        lang: 'en',
-                    }
-                });
-
-                for (var i = 0; i < overtypeEditor.length; i++) {
-                    // overtypeEditor[i].textarea.setAttribute('autocomplete', 'on');
-                    // overtypeEditor[i].textarea.setAttribute('autocorrect', 'on');
-                    // overtypeEditor[i].textarea.setAttribute('autocapitalize', 'on');
-                    // overtypeEditor[i].textarea.setAttribute('spellcheck', 'true');
-                    // overtypeEditor[i].textarea.setAttribute('data-gramm', 'true');
-                    // overtypeEditor[i].textarea.setAttribute('data-gramm_editor', 'true');
-                    // overtypeEditor[i].textarea.setAttribute('data-enable-grammarly', 'true');
-                    
-                    // Add paste event listener for image paste
-                    overtypeEditor[i].textarea.addEventListener('paste', function(e) {
-                        app.handlePaste(e);
-                    });
-                }
-
-            }
-
             // setup codemirror if it exists
             if(document.getElementById("codemirrorEditor")) {
                 codemirrorEditor = CodeMirror.fromTextArea(document.getElementById("codemirrorEditor"), {
@@ -825,6 +816,7 @@
                     autocapitalize: true,
                     viewportMargin: Infinity,
                     scrollBarStyle: 'native',
+                    autofocus: true,
                     // auto expand
 
                     extraKeys: {
@@ -916,6 +908,18 @@
                     app.content = cm.getValue();
                 });
 
+                const content = codemirrorEditor.getValue();
+                const targetText = "write...";
+                if (content.endsWith(targetText)) {
+                    const startPos = content.lastIndexOf(targetText);
+                    const startCoords = codemirrorEditor.posFromIndex(startPos);
+                    const endCoords = codemirrorEditor.posFromIndex(startPos + targetText.length);
+                    codemirrorEditor.setSelection(startCoords, endCoords);
+                    codemirrorEditor.replaceSelection("");
+                }
+                codemirrorEditor.focus();
+
+
                 // Add paste event listener for image paste
                 codemirrorEditor.getInputField().addEventListener('paste', function(e) {
                     app.handlePaste(e);
@@ -972,6 +976,8 @@
                     distractionFree: false, // it bugs out if you set it true. so don't.
                     sidebarVisible: true,
                     isDragOver: false,
+                    isPageDragOver: false,
+                    dragCounter: 0,
                     uploading: false,
                     uploadProgress: 0,
                     sidebarBelow: false,
@@ -1068,6 +1074,13 @@ Start writing your content here. The editor is now centered with a fixed maximum
                 },
                 toggleDistractionFree() {
                     this.distractionFree = !this.distractionFree
+                },
+                openNewPostHint() {
+                    const hint = document.getElementById("new-post-hint").value.trim();
+                    if (hint) {
+                        // onclick="location.href='/admin/edit?path=' + document.getElementById('new-post-hint').value"
+                        window.location.href = '/admin/edit?path=' + encodeURIComponent(hint);
+                    }
                 },
                 cycleEditorWidth() {
                     const widthKeys = Object.keys(this.editorWidthOptions)
@@ -1420,15 +1433,6 @@ Start writing your content here. The editor is now centered with a fixed maximum
                     this.insertAtCursor(link)
                 },
                 insertAtCursor(text) {
-                    // const textarea = document.getElementsByClassName("overtype-input")[0];
-                    // const start = textarea.selectionStart
-                    // const end = textarea.selectionEnd
-                    //
-                    // textarea.value = this.content.substring(0, start) + text + this.content.substring(end)
-                    // this.$nextTick(() => {
-                    //     textarea.focus()
-                    //     textarea.setSelectionRange(start + text.length, start + text.length)
-                    // })
                     const cursor = codemirrorEditor.getCursor();
 
                     // Insert text at cursor position
@@ -1440,30 +1444,6 @@ Start writing your content here. The editor is now centered with a fixed maximum
 
 
                 insertAtCursorWithNewlines(text) {
-                    // const textarea = document.getElementsByClassName("overtype-input")[0];
-                    // const start = textarea.selectionStart
-                    // const end = textarea.selectionEnd
-                    //
-                    // // Check if we need leading newline (not at start of line)
-                    // const beforeCursor = this.content.substring(0, start);
-                    // const needsLeadingNewline = beforeCursor.length > 0 && !beforeCursor.endsWith('\n');
-                    //
-                    // // Check if we need trailing newline (not followed by newline)
-                    // const afterCursor = this.content.substring(end);
-                    // const needsTrailingNewline = afterCursor.length > 0 && !afterCursor.startsWith('\n');
-                    //
-                    // // Build the text to insert with appropriate newlines
-                    // let textToInsert = '';
-                    // if (needsLeadingNewline) textToInsert += '\n';
-                    // textToInsert += text;
-                    // if (needsTrailingNewline) textToInsert += '\n';
-                    //
-                    // textarea.value = this.content.substring(0, start) + textToInsert + this.content.substring(end)
-                    // this.$nextTick(() => {
-                    //     textarea.focus()
-                    //     textarea.setSelectionRange(start + textToInsert.length, start + textToInsert.length)
-                    // })
-
                         const cursor = codemirrorEditor.getCursor();
                         const lineContent = codemirrorEditor.getLine(cursor.line);
 
@@ -1718,10 +1698,81 @@ Start writing your content here. The editor is now centered with a fixed maximum
                         this.renaming = false;
                     }
                     // Note: don't set renaming = false here since we're redirecting
+                },
+                setupPageDragAndDrop() {
+                    // Add window-level drag event listeners for full-page drag and drop
+                    const handlePageDragEnter = (e) => {
+                        e.preventDefault();
+                        // Only show overlay for actual files
+                        if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+                            this.dragCounter++;
+                            this.isPageDragOver = true;
+                        }
+                    };
+
+                    const handlePageDragOver = (e) => {
+                        e.preventDefault();
+                        // Keep the overlay visible while dragging over the page
+                        if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+                            this.isPageDragOver = true;
+                        }
+                    };
+
+                    const handlePageDragLeave = (e) => {
+                        e.preventDefault();
+                        // Use counter to handle nested elements properly
+                        this.dragCounter--;
+                        if (this.dragCounter <= 0) {
+                            this.dragCounter = 0;
+                            this.isPageDragOver = false;
+                        }
+                    };
+
+                    const handlePageDrop = (e) => {
+                        e.preventDefault();
+                        this.dragCounter = 0;
+                        this.isPageDragOver = false;
+                        
+                        // Handle the dropped files
+                        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+                            const files = Array.from(e.dataTransfer.files);
+                            this.addPendingFiles(files);
+                            
+                            // Auto-upload if enabled
+                            if (this.autoUploadEnabled) {
+                                this.uploadPendingFiles();
+                            }
+                        }
+                    };
+
+                    // Add event listeners to window
+                    window.addEventListener('dragenter', handlePageDragEnter);
+                    window.addEventListener('dragover', handlePageDragOver);
+                    window.addEventListener('dragleave', handlePageDragLeave);
+                    window.addEventListener('drop', handlePageDrop);
+
+                    // Store references for cleanup if needed
+                    this._pageDragHandlers = {
+                        dragenter: handlePageDragEnter,
+                        dragover: handlePageDragOver,
+                        dragleave: handlePageDragLeave,
+                        drop: handlePageDrop
+                    };
+                },
+                cleanupPageDragAndDrop() {
+                    // Remove event listeners if needed (e.g., in beforeUnmount)
+                    if (this._pageDragHandlers) {
+                        window.removeEventListener('dragenter', this._pageDragHandlers.dragenter);
+                        window.removeEventListener('dragover', this._pageDragHandlers.dragover);
+                        window.removeEventListener('dragleave', this._pageDragHandlers.dragleave);
+                        window.removeEventListener('drop', this._pageDragHandlers.drop);
+                    }
                 }
             },
             mounted() {
                 this.loadSavedStates()
+                this.setupPageDragAndDrop()
+                
                 if (this.$refs.editor) {
                     this.autoResize({ target: this.$refs.editor })
                 }
