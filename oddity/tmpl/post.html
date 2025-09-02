@@ -79,10 +79,10 @@
     <!-- Main Content Wrapper -->
     <div class="flex-1 flex flex-col max-w-4xl mx-auto w-full">
         <!-- Main Content -->
-        <div class="flex-1 px-4 py-8">
+        <div class="flex-1 px-4 py-4 lg:py-8">
             <!-- Page Header -->
-            <header class="mb-4 pb-4">
-                <h1 class="text-3xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
+            <header class="mb-4 pb-0">
+                <h1 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-3">{{.Meta.Title}}</h1>
 
                 {{if or .CreatedDate .ModifiedDate .WordCount .ReadingTime}}
 
@@ -123,7 +123,7 @@
             </header>
 
             <!-- Post Content -->
-            <article class="prose prose-sm max-w-none font-mono text-base leading-relaxed">
+            <article class="prose prose-sm max-w-none font-mono lg:text-base text-sm leading-relaxed">
                 {{.PageHTML}}
             </article>
 

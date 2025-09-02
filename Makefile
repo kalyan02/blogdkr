@@ -49,8 +49,8 @@ docker-restart: down up ## Restart all Docker services
 # Individual service management
 .PHONY: caddy-up
 caddy-up: ## Start Caddy reverse proxy (requires sudo for port 80)
-	@mkdir -p caddy/data caddy/config caddy/logs
-	@chown -R $(USER):$(USER) caddy/
+	@mkdir -p caddy/data caddy/config caddy/logs || true
+	@chown -R $(USER):$(USER) caddy/ || true
 	sudo docker-compose up -d $(SERVICE_CADDY)
 
 .PHONY: caddy-down
