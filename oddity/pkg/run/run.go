@@ -2,6 +2,7 @@ package run
 
 import (
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -96,6 +97,20 @@ func StartServer(cfg config.Config) {
 		Authz:          authzApp,
 	}
 
+	// inspect cloudflare headers middleware
+	// oddity  | time="2025-09-02T10:33:23Z" level=info msg="Cf-Visitor: {\"scheme\":\"https\"}"
+	// if the cf visitor header is set, and if scheme is not https, redirect to https path
+	r.Use(func(c *gin.Context) {
+		cfVisitor := c.GetHeader("Cf-Visitor")
+		if cfVisitor != "" && strings.Contains(cfVisitor, "\"scheme\":\"http\"") {
+			newURL := "https://" + c.Request.Host + c.Request.RequestURI
+			logrus.Infof("Redirecting to HTTPS: %s", newURL)
+			c.Redirect(http.StatusFound, newURL)
+			c.Abort()
+			return
+		}
+		c.Next()
+	})
 	// auth middleware
 	r.Use(authzApp.AuthMiddleware())
 

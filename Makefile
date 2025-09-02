@@ -60,6 +60,14 @@ caddy-down: ## Stop Caddy reverse proxy
 .PHONY: caddy-restart
 caddy-restart: caddy-down caddy-up ## Restart Caddy
 
+.PHONY: caddy-reload
+caddy-reload: ## reload caddy config
+	docker-compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+.PHONY: caddy-fmt
+caddy-fmt: ## format caddyfile
+	docker-compose exec caddy caddy fmt --overwrite /etc/caddy/Caddyfile
+
 .PHONY: php-up
 php-up: ## Start PHP-FPM service
 	sudo docker-compose up -d php

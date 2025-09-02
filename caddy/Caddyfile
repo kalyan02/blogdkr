@@ -4,7 +4,7 @@
 		X-Frame-Options "SAMEORIGIN"
 		X-Content-Type-Options "nosniff"
 		X-XSS-Protection "1; mode=block"
-		Server "Caddy/BlogSync"
+		#Server "Caddy/BlogSync"
 	}
 }
 
@@ -51,7 +51,12 @@
 			roll_size 10MB
 			roll_keep 5
 		}
-		format json
+		level DEBUG
+		format json {
+			time_format "2006-01-02T15:04:05.000Z07:00"
+			time_key "timestamp"
+			message_key "message"
+		}
 	}
 }
 
@@ -69,13 +74,14 @@
 # Plain HTTP
 
 http://kalyanchakravarthy.net, http://www.kalyanchakravarthy.net {
-        redir /pages/about.html https://namburi.org/about/
-        redir https://namburi.org{uri}
+	import logging
+	import security_headers
+	redir /pages/about.html https://namburi.org/about/
+	redir https://namburi.org{uri}
 }
-
 
 namburi.org:80 {
 	import logging
 	import security_headers
-	import app_routes	
+	import app_routes
 }
