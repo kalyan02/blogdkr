@@ -513,6 +513,20 @@ func SaveFileDetail(sc *ContentStuff, wc *Wire, fd *FileDetail) error {
 	return nil
 }
 
+type PostSaveHistoryChange struct {
+	Field    string `json:"field"`
+	OldValue string `json:"old_value"`
+	NewValue string `json:"new_value"`
+}
+
+type PostSaveHistory struct {
+	ID       int64     `gorm:"primaryKey;autoIncrement:true" json:"id"`
+	FileName string    `gorm:"index;not null" json:"file_name"`
+	FullSlug string    `gorm:"index;not null" json:"full_slug"`
+	Changes  string    `gorm:"text" json:"changes"`
+	Created  time.Time `gorm:"autoCreateTime" json:"created"`
+}
+
 type PostHistory struct {
 	ID       int64     `gorm:"primaryKey;autoIncrement:true"`
 	FileName string    `gorm:"index;not null"`

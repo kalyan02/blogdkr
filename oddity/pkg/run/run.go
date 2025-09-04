@@ -111,6 +111,8 @@ func StartServer(cfg config.Config) {
 		}
 		c.Next()
 	})
+
+	
 	// auth middleware
 	r.Use(authzApp.AuthMiddleware())
 

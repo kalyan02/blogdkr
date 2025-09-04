@@ -30,6 +30,18 @@ func (s *SiteApp) RegisterRoutes(r *gin.Engine) {
 func (s *SiteApp) handleAllContentPages(c *gin.Context) {
 	requestPath := c.Request.URL.Path
 
+	// if request path ends with /debug print all headers to console and return 404
+	if strings.HasSuffix(requestPath, "/debug") {
+		logrus.Infof("Request Headers for %s:", requestPath)
+		for name, values := range c.Request.Header {
+			for _, value := range values {
+				logrus.Infof("%s: %s", name, value)
+			}
+		}
+		s.render404(c)
+		return
+	}
+
 	logrus.Infof("Handling request for path: %s", requestPath)
 
 		// if request path ends with /debug print all headers to console and return 404

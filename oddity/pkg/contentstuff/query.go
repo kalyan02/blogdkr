@@ -86,6 +86,7 @@ type QueryXML struct {
 	Order        string   `xml:"order,attr"`
 	Limit        string   `xml:"limit,attr"`
 	HTMLTemplate string   `xml:"html-template,attr"`
+	Format       string   `xml:"format,attr"`
 	MDFormat     string   `xml:"md-format,attr"`
 	Where        string   `xml:"where,attr"`
 	Tag          string   `xml:"tag,attr"`
@@ -165,7 +166,13 @@ func ParseQuery(queryString string) (*QueryAST, error) {
 
 	// Parse markdown format
 	if queryXML.MDFormat != "" {
-		query.MDFormat = FormatType(strings.ToLower(queryXML.MDFormat))
+		// see if user maybe used "format" instead of "md-format"
+		if queryXML.Format != "" {
+			query.MDFormat = FormatType(strings.ToLower(queryXML.Format))
+		} else {
+			query.MDFormat = FormatType(strings.ToLower(queryXML.MDFormat))
+		}
+
 	} else {
 		query.MDFormat = FormatListWithDate // default
 	}
